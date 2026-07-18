@@ -1,0 +1,112 @@
+import { UserEntity } from '../entities/user.entity.js';
+import { AdminPermission } from '../enums/admin-permission.enum.js';
+import { OtpPurpose } from '../enums/otp-purpose.enum.js';
+import { VerificationStatus } from '../enums/verification-status.enum.js';
+
+export interface CreateUserData {
+  phone: string;
+  email: string;
+  password: string;
+  nickname: string;
+}
+
+export interface UpdateUserData {
+  email?: string | null;
+  password?: string;
+  nickname?: string;
+  phone?: string;
+  avatar?: string | null;
+  isActive?: boolean;
+  isBanned?: boolean;
+  banReason?: string | null;
+  isEmailVerified?: boolean;
+  isPhoneVerified?: boolean;
+  emailVerifiedAt?: Date | null;
+  phoneVerifiedAt?: Date | null;
+  lastLoginAt?: Date | null;
+  adminRoleId?: string | null;
+  authTokenVersion?: number;
+}
+
+export interface OtpVerificationData {
+  id: string;
+  phone: string;
+  code: string;
+  purpose: OtpPurpose;
+  status: VerificationStatus;
+  expiresAt: Date;
+  attempts: number;
+  maxAttempts: number;
+}
+
+export interface EmailVerificationData {
+  id: string;
+  email: string;
+  token: string;
+  status: VerificationStatus;
+  expiresAt: Date;
+}
+
+export interface UserAdminRoleData {
+  id: string;
+  name: string;
+  isSystem: boolean;
+  permissions: AdminPermission[];
+}
+
+export interface UserAuthData {
+  user: UserEntity;
+  adminRole: UserAdminRoleData | null;
+}
+
+export interface IUserRepository {
+  create(data: CreateUserData): Promise<UserEntity>;
+  findById(id: string): Promise<UserEntity | null>;
+  findByEmail(email: string): Promise<UserEntity | null>;
+  findByPhone(phone: string): Promise<UserEntity | null>;
+  findAll(): Promise<UserEntity[]>;
+  update(id: string, data: UpdateUserData): Promise<UserEntity>;
+  setUserBanned(
+    userId: string,
+    banned: boolean,
+    banReason?: string | null,
+  ): Promise<UserEntity>;
+  delete(id: string): Promise<boolean>;
+  getProfileAvatarUrl(userId: string): Promise<string | null>;
+  setProfileAvatar(userId: string, avatarUrl: string | null): Promise<void>;
+
+  createPhoneOtp(
+    phone: string,
+    code: string,
+    expiresAt: Date,
+    purpose?: OtpPurpose,
+  ): Promise<void>;
+  findLatestActivePhoneOtp(
+    phone: string,
+    purpose?: OtpPurpose,
+  ): Promise<OtpVerificationData | null>;
+  incrementPhoneOtpAttempt(id: string): Promise<void>;
+  markPhoneOtpFailed(id: string): Promise<void>;
+  markPhoneOtpVerified(id: string): Promise<void>;
+  markUserPhoneVerified(phone: string): Promise<void>;
+
+  createEmailVerification(
+    email: string,
+    token: string,
+    expiresAt: Date,
+  ): Promise<void>;
+  findActiveEmailVerification(
+    email: string,
+    token: string,
+  ): Promise<EmailVerificationData | null>;
+  markEmailVerificationExpired(id: string): Promise<void>;
+  markEmailVerificationVerified(id: string): Promise<void>;
+  markUserEmailVerified(email: string): Promise<void>;
+
+  findAdminUserIds(): Promise<string[]>;
+  listAdminUsers(): Promise<UserEntity[]>;
+  getAuthDataByUserId(userId: string): Promise<UserAuthData | null>;
+  getAdminRoleByUserId(userId: string): Promise<UserAdminRoleData | null>;
+}
+
+export const USER_REPOSITORY = Symbol('USER_REPOSITORY');

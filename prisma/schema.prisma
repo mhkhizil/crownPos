@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  ENUMS
+// ════════════════════════════════════════════════════════════════════════════════
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  FAILED
+}
+
+enum OtpPurpose {
+  PHONE_VERIFICATION
+  PASSWORD_RESET
+}
+
+/// Extend this enum per project (POS modules, inventory, etc.).
+enum AdminPermission {
+  MANAGE_USERS
+  VIEW_ANALYTICS
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  1 · USERS
+// ════════════════════════════════════════════════════════════════════════════════
+
+model User {
+  id       String  @id @default(uuid())
+  phone    String  @unique
+  email    String? @unique
+  password String
+  nickname String
+  avatar   String?
+
+  isEmailVerified Boolean   @default(false) @map("is_email_verified")
+  isPhoneVerified Boolean   @default(false) @map("is_phone_verified")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+
+  isActive  Boolean   @default(true) @map("is_active")
+  isBanned  Boolean   @default(false) @map("is_banned")
+  banReason String?   @map("ban_reason")
+  bannedAt  DateTime? @map("banned_at")
+
+  authTokenVersion Int       @default(0) @map("auth_token_version")
+  lastLoginAt      DateTime? @map("last_login_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+
+  adminRoleId String?    @map("admin_role_id")
+  adminRole   AdminRole? @relation(fields: [adminRoleId], references: [id])
+
+  @@index([phone])
+  @@index([isActive, isBanned])
+  @@map("users")
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  2 · VERIFICATION  (OTP for phone, token for email)
+// ════════════════════════════════════════════════════════════════════════════════
+
+model OtpVerification {
+  id          String             @id @default(uuid())
+  phone       String
+  code        String
+  purpose     OtpPurpose         @default(PHONE_VERIFICATION)
+  status      VerificationStatus @default(PENDING)
+  expiresAt   DateTime           @map("expires_at")
+  attempts    Int                @default(0)
+  maxAttempts Int                @default(5) @map("max_attempts")
+  verifiedAt  DateTime?          @map("verified_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  @@index([phone, status])
+  @@index([phone, status, purpose])
+  @@index([expiresAt])
+  @@map("otp_verifications")
+}
+
+model EmailVerification {
+  id         String             @id @default(uuid())
+  email      String
+  token      String             @unique
+  status     VerificationStatus @default(PENDING)
+  expiresAt  DateTime           @map("expires_at")
+  verifiedAt DateTime?          @map("verified_at")
+  createdAt  DateTime           @default(now()) @map("created_at")
+
+  @@index([email, status])
+  @@index([expiresAt])
+  @@map("email_verifications")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  3 · ADMIN RBAC
+//
+//  root_admin  → single static account, full access, cannot be deleted
+//  admin roles → dynamic, created by root_admin with cherry-picked permissions
+// ════════════════════════════════════════════════════════════════════════════════
+
+model AdminRole {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+
+  // true for ROOT_ADMIN (seeded, immutable)
+  isSystem Boolean @default(false) @map("is_system")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  permissions AdminRolePermission[]
+  users       User[]
+
+  @@map("admin_roles")
+}
+
+model AdminRolePermission {
+  id         String          @id @default(uuid())
+  roleId     String          @map("role_id")
+  role       AdminRole       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission AdminPermission
+
+  @@unique([roleId, permission])
+  @@map("admin_role_permissions")
+}
