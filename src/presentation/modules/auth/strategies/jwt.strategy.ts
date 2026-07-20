@@ -20,19 +20,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: {
-    sub: string;
-    phone: string;
-    authTokenVersion?: number;
-  }): Promise<JwtPayload> {
+  async validate(payload: { sub: string; email?: string }): Promise<JwtPayload> {
     const user = await this.userRepository.findById(payload.sub);
     if (!user || !user.isActiveUser()) {
-      throw new UnauthorizedException('Account is deactivated or banned');
+      throw new UnauthorizedException('Account is deactivated or suspended');
     }
-    const tokenVersion = payload.authTokenVersion ?? 0;
-    if (user.authTokenVersion !== tokenVersion) {
-      throw new UnauthorizedException('Session has been revoked');
-    }
-    return { sub: payload.sub, phone: payload.phone };
+    return { sub: payload.sub, phone: user.phone ?? '', email: user.email };
   }
 }

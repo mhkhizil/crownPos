@@ -1,3 +1,15 @@
+// =============================================================================
+// Manufacturing & Distribution Business — Prisma Schema (PostgreSQL)
+// Company: single company, one factory now (multi-factory ready)
+// Soft-delete: every business table has deletedAt (no hard deletes in app logic)
+// i18n: nameEn + nameMm where user-facing names exist
+// IDs: cuid()
+// Money: MMK (Int/BigInt kyats; use Decimal for unit prices where needed)
+// =============================================================================
+// NOTE: Root user (email mhkhizilthurainzaw@gmail.com) is created via seed/app
+// bootstrap — never store plaintext passwords in the schema.
+// =============================================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,147 +18,1560 @@ datasource db {
   provider = "postgresql"
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  ENUMS
-// ════════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+// ENUMS
+// =============================================================================
 
-enum VerificationStatus {
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum CustomerType {
+  SHOP
+  DISTRIBUTOR
+  END_CUSTOMER
+}
+
+enum ShopType {
+  HARDWARE
+  CONSTRUCTION_SUPPLY
+  GENERAL_STORE
+  WHOLESALE
+  OTHER
+}
+
+enum GateType {
+  MAIN
+  BRANCH
+}
+
+enum DeliveryChannel {
+  /// Yangon / nearby — factory delivers straight to shop
+  DIRECT_TO_SHOP
+  /// Far regions — via Yangon car gate → destination city gate
+  VIA_GATE
+}
+
+enum CustomerReceiveMode {
+  /// Customer collects at destination gate
+  CUSTOMER_PICKUP_AT_GATE
+  /// Gate delivers to customer door (controlled by gate, not factory)
+  GATE_DELIVERS_TO_CUSTOMER
+}
+
+enum OutboundStatus {
+  /// Packed / recorded leaving factory intent
+  READY_AT_FACTORY
+  /// Sent to Yangon car gate
+  SENT_TO_YANGON_GATE
+  /// Between Yangon gate and destination city gate
+  IN_TRANSIT
+  /// Arrived at destination city / branch gate
+  AT_DESTINATION_GATE
+  /// Customer / shop has received the goods
+  RECEIVED_BY_CUSTOMER
+  CANCELLED
+  RETURNED
+}
+
+enum PurchaseStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  /// Insufficient stock — waiting for inventory (internal hold)
+  HOLD
+  CONFIRMED
+  PARTIALLY_FULFILLED
+  /// Customer has received the goods
+  GOODS_RECEIVED
+  /// Received, but payment not fully collected yet
+  AWAITING_PAYMENT
+  /// Payment complete — sale is OK / closed
+  SALE_OK
+  CANCELLED
+}
+
+/// Who initiated the order
+enum OrderSource {
+  /// Our sales team called the shop
+  SALES_OUTBOUND_CALL
+  /// Shop called us
+  SHOP_INBOUND_CALL
+  OTHER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+  WRITTEN_OFF
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  BANK_TRANSFER
+  OTHER
+}
+
+enum PaymentStatus {
   PENDING
-  VERIFIED
-  EXPIRED
+  CONFIRMED
   FAILED
+  CANCELLED
 }
 
-enum OtpPurpose {
-  PHONE_VERIFICATION
-  PASSWORD_RESET
+enum CollectionReminderStatus {
+  SCHEDULED
+  NOTIFIED
+  ACKNOWLEDGED
+  COMPLETED
+  CANCELLED
 }
 
-/// Extend this enum per project (POS modules, inventory, etc.).
-enum AdminPermission {
-  MANAGE_USERS
-  VIEW_ANALYTICS
+enum InventoryItemType {
+  RAW_MATERIAL
+  FINISHED_GOOD
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  1 · USERS
-// ════════════════════════════════════════════════════════════════════════════════
+enum DigitalAssetType {
+  FACEBOOK_PAGE
+  WEBSITE
+  DOMAIN
+  OTHER
+}
+
+enum PhysicalAssetType {
+  VEHICLE
+  MACHINE
+  LAND
+  BUILDING
+  TANK
+  MOLD
+  EQUIPMENT
+  OTHER
+}
+
+enum AssetCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  RETIRED
+}
+
+enum MarketingPlanStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum CampaignStatus {
+  PLANNED
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum TargetPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PotentialVolumeBand {
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
+// =============================================================================
+// 1. COMPANY & FACTORY (one now, multi later)
+// =============================================================================
+
+model Company {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  nameEn      String
+  nameMm      String?
+  phone       String?
+  email       String?
+  addressEn   String?
+  addressMm   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  factories   Factory[]
+  users       User[]
+  stockLocations StockLocation[]
+  digitalAssets  DigitalAsset[]
+  physicalAssets PhysicalAsset[]
+  marketingPlans MarketingPlan[]
+
+  @@index([deletedAt])
+}
+
+model Factory {
+  id          String    @id @default(cuid())
+  companyId   String
+  code        String
+  nameEn      String
+  nameMm      String?
+  cityId      String?
+  addressEn   String?
+  addressMm   String?
+  isPrimary   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  company     Company   @relation(fields: [companyId], references: [id])
+  city        City?     @relation(fields: [cityId], references: [id])
+  stockLocations StockLocation[]
+  productionDailyRecords ProductionDailyRecord[]
+  factoryOutbounds FactoryOutbound[]
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([cityId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 2. AUTH — root + customizable roles & permissions
+// =============================================================================
 
 model User {
-  id       String  @id @default(uuid())
-  phone    String  @unique
-  email    String? @unique
-  password String
-  nickname String
-  avatar   String?
+  id           String     @id @default(cuid())
+  companyId    String?
+  email        String     @unique
+  passwordHash String
+  nameEn       String
+  nameMm       String?
+  phone        String?
+  /// Exactly one root user in the system (seeded); can manage all roles
+  isRoot       Boolean    @default(false)
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
 
-  isEmailVerified Boolean   @default(false) @map("is_email_verified")
-  isPhoneVerified Boolean   @default(false) @map("is_phone_verified")
-  emailVerifiedAt DateTime? @map("email_verified_at")
-  phoneVerifiedAt DateTime? @map("phone_verified_at")
+  company      Company?   @relation(fields: [companyId], references: [id])
+  userRoles    UserRole[]
+  salespersonTargets CustomerTarget[] @relation("SalespersonTargets")
+  assignedReminders  CollectionReminder[] @relation("ReminderAssignee")
+  createdReminders   CollectionReminder[] @relation("ReminderCreator")
+  salesOrdersTaken   SalesOrder[]         @relation("SalesOrderTakenBy")
+  productionDaysWorked ProductionDailyWorker[]
+  outboundsAsDriver  FactoryOutbound[]    @relation("OutboundDriver")
 
-  isActive  Boolean   @default(true) @map("is_active")
-  isBanned  Boolean   @default(false) @map("is_banned")
-  banReason String?   @map("ban_reason")
-  bannedAt  DateTime? @map("banned_at")
-
-  authTokenVersion Int       @default(0) @map("auth_token_version")
-  lastLoginAt      DateTime? @map("last_login_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-
-  refreshTokens RefreshToken[]
-
-  adminRoleId String?    @map("admin_role_id")
-  adminRole   AdminRole? @relation(fields: [adminRoleId], references: [id])
-
-  @@index([phone])
-  @@index([isActive, isBanned])
-  @@map("users")
+  @@index([companyId])
+  @@index([isRoot])
+  @@index([deletedAt])
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  2 · VERIFICATION  (OTP for phone, token for email)
-// ════════════════════════════════════════════════════════════════════════════════
-
-model OtpVerification {
-  id          String             @id @default(uuid())
-  phone       String
-  code        String
-  purpose     OtpPurpose         @default(PHONE_VERIFICATION)
-  status      VerificationStatus @default(PENDING)
-  expiresAt   DateTime           @map("expires_at")
-  attempts    Int                @default(0)
-  maxAttempts Int                @default(5) @map("max_attempts")
-  verifiedAt  DateTime?          @map("verified_at")
-  createdAt   DateTime           @default(now()) @map("created_at")
-
-  @@index([phone, status])
-  @@index([phone, status, purpose])
-  @@index([expiresAt])
-  @@map("otp_verifications")
-}
-
-model EmailVerification {
-  id         String             @id @default(uuid())
-  email      String
-  token      String             @unique
-  status     VerificationStatus @default(PENDING)
-  expiresAt  DateTime           @map("expires_at")
-  verifiedAt DateTime?          @map("verified_at")
-  createdAt  DateTime           @default(now()) @map("created_at")
-
-  @@index([email, status])
-  @@index([expiresAt])
-  @@map("email_verifications")
-}
-
-model RefreshToken {
-  id        String    @id @default(uuid())
-  token     String    @unique
-  userId    String    @map("user_id")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime  @map("expires_at")
-  revokedAt DateTime? @map("revoked_at")
-  userAgent String?   @map("user_agent")
-  ipAddress String?   @map("ip_address")
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  @@index([userId])
-  @@index([expiresAt])
-  @@map("refresh_tokens")
-}
-
-// ════════════════════════════════════════════════════════════════════════════════
-//  3 · ADMIN RBAC
-//
-//  root_admin  → single static account, full access, cannot be deleted
-//  admin roles → dynamic, created by root_admin with cherry-picked permissions
-// ════════════════════════════════════════════════════════════════════════════════
-
-model AdminRole {
-  id          String  @id @default(uuid())
-  name        String  @unique
+model Role {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  nameEn      String
+  nameMm      String?
   description String?
+  isSystem    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
-  // true for ROOT_ADMIN (seeded, immutable)
-  isSystem Boolean @default(false) @map("is_system")
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  permissions AdminRolePermission[]
-  users       User[]
-
-  @@map("admin_roles")
+  @@index([deletedAt])
 }
 
-model AdminRolePermission {
-  id         String          @id @default(uuid())
-  roleId     String          @map("role_id")
-  role       AdminRole       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission AdminPermission
+model Permission {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  module      String
+  nameEn      String
+  nameMm      String?
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
-  @@unique([roleId, permission])
-  @@map("admin_role_permissions")
+  rolePermissions RolePermission[]
+
+  @@index([module])
+  @@index([deletedAt])
+}
+
+model RolePermission {
+  id           String    @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@index([deletedAt])
+}
+
+model UserRole {
+  id        String    @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user      User      @relation(fields: [userId], references: [id])
+  role      Role      @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 3. UNITS (configurable: dozen, kg, liter, carton, bottle, drum, …)
+// =============================================================================
+
+model Unit {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  nameEn    String
+  nameMm    String?
+  symbol    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  productSkus              ProductSku[]
+  rawMaterials             RawMaterial[]
+  billOfMaterials          BillOfMaterial[]           @relation("BomOutputUnit")
+  billOfMaterialLines      BillOfMaterialLine[]       @relation("BomLineUnit")
+  productionDailyLines     ProductionDailyLine[]
+  factoryOutboundLines     FactoryOutboundLine[]
+  salesOrderLines          SalesOrderLine[]
+  invoiceLines             InvoiceLine[]
+  purchaseOrderLines       PurchaseOrderLine[]
+  dailyStockCountLines     DailyStockCountLine[]
+  productionDailyRawUsages ProductionDailyRawUsage[]
+  inventoryBalances        InventoryBalance[]
+  customerProductPrices    CustomerProductPrice[]
+  volumePriceTiers         VolumePriceTier[]
+  cityProductPrices        CityProductPrice[]
+
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 4. BRANDS → PRODUCTS → SKUs (pack sizes)
+// Q3 explained: Brand (Crown) → Product (Ceramic Cleanser Liquid) → SKU (5L bottle)
+// =============================================================================
+
+model Brand {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  nameEn      String
+  nameMm      String?
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  products              Product[]
+  brandAwarenessRecords BrandAwarenessRecord[]
+  campaigns             MarketingCampaign[]
+
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model Product {
+  id          String    @id @default(cuid())
+  brandId     String
+  code        String    @unique
+  nameEn      String
+  nameMm      String?
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  brand       Brand     @relation(fields: [brandId], references: [id])
+  skus        ProductSku[]
+
+  @@index([brandId])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+/// Sellable / manufacturable pack size (e.g. 1 dozen bags, 5L bottle, 20L drum)
+model ProductSku {
+  id           String    @id @default(cuid())
+  productId    String
+  unitId       String
+  code         String    @unique
+  nameEn       String
+  nameMm       String?
+  /// Numeric size in the chosen unit (e.g. 5 for 5L, 12 for dozen pack)
+  packSize     Decimal   @default(1) @db.Decimal(18, 4)
+  barcode      String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  product      Product   @relation(fields: [productId], references: [id])
+  unit         Unit      @relation(fields: [unitId], references: [id])
+  billOfMaterials      BillOfMaterial[]
+  productionDailyLines ProductionDailyLine[]
+  factoryOutboundLines FactoryOutboundLine[]
+  salesOrderLines      SalesOrderLine[]
+  invoiceLines         InvoiceLine[]
+  dailyStockCountLines DailyStockCountLine[]
+  inventoryBalances    InventoryBalance[]
+  customerProductPrices CustomerProductPrice[]
+  volumePriceTiers      VolumePriceTier[]
+  cityProductPrices     CityProductPrice[]
+
+  @@index([productId])
+  @@index([unitId])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 5. RAW MATERIALS, SUPPLIERS, PURCHASES
+// =============================================================================
+
+model RawMaterial {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  nameEn      String
+  nameMm      String?
+  unitId      String
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  unit                 Unit                   @relation(fields: [unitId], references: [id])
+  supplierLinks        SupplierRawMaterial[]
+  billOfMaterialLines  BillOfMaterialLine[]
+  purchaseOrderLines   PurchaseOrderLine[]
+  dailyStockCountLines DailyStockCountLine[]
+  productionDailyRawUsages ProductionDailyRawUsage[]
+  inventoryBalances    InventoryBalance[]
+
+  @@index([unitId])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model Supplier {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  nameEn      String
+  nameMm      String?
+  phone       String?
+  email       String?
+  addressEn   String?
+  addressMm   String?
+  notes       String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  rawMaterialLinks SupplierRawMaterial[]
+  purchaseOrders   PurchaseOrder[]
+
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+/// Many suppliers can supply the same raw material
+model SupplierRawMaterial {
+  id            String    @id @default(cuid())
+  supplierId    String
+  rawMaterialId String
+  supplierSku   String?
+  unitPriceMmk  Decimal?  @db.Decimal(18, 2)
+  leadTimeDays  Int?
+  isPreferred   Boolean   @default(false)
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  supplier      Supplier    @relation(fields: [supplierId], references: [id])
+  rawMaterial   RawMaterial @relation(fields: [rawMaterialId], references: [id])
+
+  @@unique([supplierId, rawMaterialId])
+  @@index([supplierId])
+  @@index([rawMaterialId])
+  @@index([deletedAt])
+}
+
+model PurchaseOrder {
+  id            String         @id @default(cuid())
+  factoryId     String
+  supplierId    String
+  orderNumber   String         @unique
+  orderDate     DateTime       @db.Date
+  status        PurchaseStatus @default(DRAFT)
+  totalAmountMmk Decimal       @default(0) @db.Decimal(18, 2)
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+
+  factory       Factory        @relation(fields: [factoryId], references: [id])
+  supplier      Supplier       @relation(fields: [supplierId], references: [id])
+  lines         PurchaseOrderLine[]
+
+  @@index([factoryId])
+  @@index([supplierId])
+  @@index([orderDate])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model PurchaseOrderLine {
+  id              String    @id @default(cuid())
+  purchaseOrderId String
+  rawMaterialId   String
+  unitId          String
+  quantityOrdered Decimal   @db.Decimal(18, 4)
+  quantityReceived Decimal  @default(0) @db.Decimal(18, 4)
+  unitPriceMmk    Decimal   @db.Decimal(18, 2)
+  lineTotalMmk    Decimal   @db.Decimal(18, 2)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  rawMaterial     RawMaterial   @relation(fields: [rawMaterialId], references: [id])
+  unit            Unit          @relation(fields: [unitId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([rawMaterialId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 6. BILL OF MATERIALS — OPTIONAL ESTIMATE / GUIDE ONLY
+// Real factory usage is free-form (no fixed batch). Actual depletion is recorded
+// in ProductionDailyRawUsage and may differ for the same output quantity.
+// =============================================================================
+
+model BillOfMaterial {
+  id              String    @id @default(cuid())
+  productSkuId    String
+  code            String    @unique
+  nameEn          String
+  nameMm          String?
+  /// Rough expected finished output qty for this estimate (e.g. 30)
+  outputQuantity  Decimal   @db.Decimal(18, 4)
+  outputUnitId    String
+  notes           String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  productSku      ProductSku @relation(fields: [productSkuId], references: [id])
+  outputUnit      Unit       @relation("BomOutputUnit", fields: [outputUnitId], references: [id])
+  lines           BillOfMaterialLine[]
+  /// Optional reference only — production does not require a BOM
+  productionDailyLines ProductionDailyLine[]
+
+  @@index([productSkuId])
+  @@index([outputUnitId])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model BillOfMaterialLine {
+  id             String    @id @default(cuid())
+  billOfMaterialId String
+  rawMaterialId  String
+  unitId         String
+  quantity       Decimal   @db.Decimal(18, 4)
+  notes          String?
+  sortOrder      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  billOfMaterial BillOfMaterial @relation(fields: [billOfMaterialId], references: [id])
+  rawMaterial    RawMaterial    @relation(fields: [rawMaterialId], references: [id])
+  unit           Unit           @relation("BomLineUnit", fields: [unitId], references: [id])
+
+  @@index([billOfMaterialId])
+  @@index([rawMaterialId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 7. PRODUCTION — daily totals + headcount + ACTUAL raw depletion (not fixed batch)
+// =============================================================================
+
+model ProductionDailyRecord {
+  id             String    @id @default(cuid())
+  factoryId      String
+  productionDate DateTime  @db.Date
+  /// How many employees worked that day
+  employeeCount  Int       @default(0)
+  notes          String?
+  recordedAt     DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  factory        Factory   @relation(fields: [factoryId], references: [id])
+  lines          ProductionDailyLine[]
+  workers        ProductionDailyWorker[]
+  /// Actual raw materials dumped / depleted that day (independent of output qty)
+  rawUsages      ProductionDailyRawUsage[]
+
+  @@unique([factoryId, productionDate])
+  @@index([productionDate])
+  @@index([deletedAt])
+}
+
+/// Optional named worker list for the day (in addition to employeeCount)
+model ProductionDailyWorker {
+  id                      String    @id @default(cuid())
+  productionDailyRecordId String
+  userId                  String?
+  workerNameEn            String?
+  workerNameMm            String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime?
+
+  productionDailyRecord ProductionDailyRecord @relation(fields: [productionDailyRecordId], references: [id])
+  user                  User?                 @relation(fields: [userId], references: [id])
+
+  @@index([productionDailyRecordId])
+  @@index([userId])
+  @@index([deletedAt])
+}
+
+model ProductionDailyLine {
+  id                      String    @id @default(cuid())
+  productionDailyRecordId String
+  productSkuId            String
+  unitId                  String
+  quantityProduced        Decimal   @db.Decimal(18, 4)
+  /// Optional BOM guide reference only — never required
+  billOfMaterialId        String?
+  notes                   String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime?
+
+  productionDailyRecord ProductionDailyRecord @relation(fields: [productionDailyRecordId], references: [id])
+  productSku            ProductSku            @relation(fields: [productSkuId], references: [id])
+  unit                  Unit                  @relation(fields: [unitId], references: [id])
+  billOfMaterial        BillOfMaterial?       @relation(fields: [billOfMaterialId], references: [id])
+
+  @@index([productionDailyRecordId])
+  @@index([productSkuId])
+  @@index([billOfMaterialId])
+  @@index([deletedAt])
+}
+
+/// Actual raw material depletion for the day (free-form; can vary for same output)
+model ProductionDailyRawUsage {
+  id                      String    @id @default(cuid())
+  productionDailyRecordId String
+  rawMaterialId           String
+  unitId                  String
+  quantityUsed            Decimal   @db.Decimal(18, 4)
+  notes                   String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime?
+
+  productionDailyRecord ProductionDailyRecord @relation(fields: [productionDailyRecordId], references: [id])
+  rawMaterial           RawMaterial           @relation(fields: [rawMaterialId], references: [id])
+  unit                  Unit                  @relation(fields: [unitId], references: [id])
+
+  @@index([productionDailyRecordId])
+  @@index([rawMaterialId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 8. INVENTORY — daily counts + light available-balance for order stock checks
+// =============================================================================
+
+model StockLocation {
+  id         String    @id @default(cuid())
+  companyId  String
+  factoryId  String?
+  code       String
+  nameEn     String
+  nameMm     String?
+  isPrimary  Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  company    Company   @relation(fields: [companyId], references: [id])
+  factory    Factory?  @relation(fields: [factoryId], references: [id])
+  dailyStockCounts  DailyStockCount[]
+  inventoryBalances InventoryBalance[]
+
+  @@unique([companyId, code])
+  @@index([factoryId])
+  @@index([deletedAt])
+}
+
+/// Latest known available qty for order-time "do we have stock?" checks.
+/// Updated from daily counts / production / outbound (app logic) — not live warehouse telemetry.
+model InventoryBalance {
+  id              String            @id @default(cuid())
+  stockLocationId String
+  itemType        InventoryItemType
+  rawMaterialId   String?
+  productSkuId    String?
+  unitId          String
+  quantityAvailable Decimal         @db.Decimal(18, 4)
+  asOfDate        DateTime          @db.Date
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+
+  stockLocation   StockLocation     @relation(fields: [stockLocationId], references: [id])
+  rawMaterial     RawMaterial?      @relation(fields: [rawMaterialId], references: [id])
+  productSku      ProductSku?       @relation(fields: [productSkuId], references: [id])
+  unit            Unit              @relation(fields: [unitId], references: [id])
+
+  @@index([stockLocationId, itemType])
+  @@index([rawMaterialId])
+  @@index([productSkuId])
+  @@index([asOfDate])
+  @@index([deletedAt])
+}
+
+model DailyStockCount {
+  id              String    @id @default(cuid())
+  stockLocationId String
+  countDate       DateTime  @db.Date
+  notes           String?
+  countedAt       DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  stockLocation   StockLocation @relation(fields: [stockLocationId], references: [id])
+  lines           DailyStockCountLine[]
+
+  @@unique([stockLocationId, countDate])
+  @@index([countDate])
+  @@index([deletedAt])
+}
+
+model DailyStockCountLine {
+  id                String            @id @default(cuid())
+  dailyStockCountId String
+  itemType          InventoryItemType
+  rawMaterialId     String?
+  productSkuId      String?
+  unitId            String
+  quantityOnHand    Decimal           @db.Decimal(18, 4)
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
+
+  dailyStockCount   DailyStockCount   @relation(fields: [dailyStockCountId], references: [id])
+  rawMaterial       RawMaterial?      @relation(fields: [rawMaterialId], references: [id])
+  productSku        ProductSku?       @relation(fields: [productSkuId], references: [id])
+  unit              Unit              @relation(fields: [unitId], references: [id])
+
+  @@index([dailyStockCountId])
+  @@index([rawMaterialId])
+  @@index([productSkuId])
+  @@index([itemType])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 9. GEOGRAPHY — Region → City → Gate (+ shop/customer)
+// Gate network: Yangon MAIN gate → BRANCH gates in other cities
+// =============================================================================
+
+model Region {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  nameEn    String
+  nameMm    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  cities    City[]
+
+  @@index([deletedAt])
+}
+
+model City {
+  id        String    @id @default(cuid())
+  regionId  String
+  code      String
+  nameEn    String
+  nameMm    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  region    Region    @relation(fields: [regionId], references: [id])
+  gates     Gate[]
+  customers Customer[]
+  factories Factory[]
+  cityProductPrices CityProductPrice[]
+  gateCityCoverages GateCityCoverage[]
+
+  @@unique([regionId, code])
+  @@index([regionId])
+  @@index([deletedAt])
+}
+
+model Gate {
+  id           String    @id @default(cuid())
+  cityId       String
+  parentGateId String?
+  code         String    @unique
+  nameEn       String
+  nameMm       String?
+  gateType     GateType  @default(BRANCH)
+  phone        String?
+  addressEn    String?
+  addressMm    String?
+  notes        String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  city         City      @relation(fields: [cityId], references: [id])
+  parentGate   Gate?     @relation("GateHierarchy", fields: [parentGateId], references: [id])
+  branchGates  Gate[]    @relation("GateHierarchy")
+  cityCoverages GateCityCoverage[]
+  preferredByCustomers Customer[] @relation("CustomerPreferredGate")
+  outboundsAsYangonGate      FactoryOutbound[] @relation("OutboundYangonGate")
+  outboundsAsDestinationGate FactoryOutbound[] @relation("OutboundDestinationGate")
+
+  @@index([cityId])
+  @@index([parentGateId])
+  @@index([gateType])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+/// Which destination cities a gate (or branch) serves / transfers to
+model GateCityCoverage {
+  id        String    @id @default(cuid())
+  gateId    String
+  cityId    String
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  gate      Gate      @relation(fields: [gateId], references: [id])
+  city      City      @relation(fields: [cityId], references: [id])
+
+  @@unique([gateId, cityId])
+  @@index([gateId])
+  @@index([cityId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 10. CUSTOMERS (mostly shops) + TARGETING
+// =============================================================================
+
+model Customer {
+  id              String       @id @default(cuid())
+  code            String       @unique
+  customerType    CustomerType @default(SHOP)
+  shopType        ShopType?
+  nameEn          String
+  nameMm          String?
+  phone           String?
+  email           String?
+  cityId          String
+  preferredGateId String?
+  addressEn       String?
+  addressMm       String?
+  isActive        Boolean      @default(true)
+  notes           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  city            City         @relation(fields: [cityId], references: [id])
+  preferredGate   Gate?        @relation("CustomerPreferredGate", fields: [preferredGateId], references: [id])
+  target          CustomerTarget?
+  salesOrders     SalesOrder[]
+  invoices        Invoice[]
+  customerProductPrices CustomerProductPrice[]
+  volumePriceTiers      VolumePriceTier[]
+
+  @@index([cityId])
+  @@index([customerType])
+  @@index([shopType])
+  @@index([preferredGateId])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+/// Target-customer options: city (via customer), shop type, potential volume, salesperson
+model CustomerTarget {
+  id                 String              @id @default(cuid())
+  customerId         String              @unique
+  isTarget           Boolean             @default(true)
+  priority           TargetPriority      @default(MEDIUM)
+  potentialVolume    PotentialVolumeBand?
+  estimatedMonthlyVolume Decimal?        @db.Decimal(18, 4)
+  salespersonUserId  String?
+  reasonEn           String?
+  reasonMm           String?
+  notes              String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
+
+  customer           Customer            @relation(fields: [customerId], references: [id])
+  salesperson        User?               @relation("SalespersonTargets", fields: [salespersonUserId], references: [id])
+
+  @@index([isTarget])
+  @@index([priority])
+  @@index([salespersonUserId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 11. PRICING — mostly by customer & volume; rarely by city
+// =============================================================================
+
+model CustomerProductPrice {
+  id           String    @id @default(cuid())
+  customerId   String
+  productSkuId String
+  unitId       String
+  unitPriceMmk Decimal   @db.Decimal(18, 2)
+  effectiveFrom DateTime @db.Date
+  effectiveTo   DateTime? @db.Date
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  customer     Customer  @relation(fields: [customerId], references: [id])
+  productSku   ProductSku @relation(fields: [productSkuId], references: [id])
+  unit         Unit      @relation(fields: [unitId], references: [id])
+
+  @@index([customerId, productSkuId])
+  @@index([effectiveFrom, effectiveTo])
+  @@index([deletedAt])
+}
+
+model VolumePriceTier {
+  id            String    @id @default(cuid())
+  productSkuId  String
+  /// Optional: tier only for one customer; null = general volume tier
+  customerId    String?
+  unitId        String
+  minQuantity   Decimal   @db.Decimal(18, 4)
+  maxQuantity   Decimal?  @db.Decimal(18, 4)
+  unitPriceMmk  Decimal   @db.Decimal(18, 2)
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  productSku    ProductSku @relation(fields: [productSkuId], references: [id])
+  customer      Customer?  @relation(fields: [customerId], references: [id])
+  unit          Unit       @relation(fields: [unitId], references: [id])
+
+  @@index([productSkuId])
+  @@index([customerId])
+  @@index([minQuantity, maxQuantity])
+  @@index([deletedAt])
+}
+
+model CityProductPrice {
+  id           String    @id @default(cuid())
+  cityId       String
+  productSkuId String
+  unitId       String
+  unitPriceMmk Decimal   @db.Decimal(18, 2)
+  effectiveFrom DateTime @db.Date
+  effectiveTo   DateTime? @db.Date
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  city         City       @relation(fields: [cityId], references: [id])
+  productSku   ProductSku @relation(fields: [productSkuId], references: [id])
+  unit         Unit       @relation(fields: [unitId], references: [id])
+
+  @@index([cityId, productSkuId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 12. SALES ORDERS
+// =============================================================================
+
+model SalesOrder {
+  id                  String            @id @default(cuid())
+  orderNumber         String            @unique
+  customerId          String
+  orderDate           DateTime          @db.Date
+  /// Sales called shop vs shop called us
+  orderSource         OrderSource       @default(OTHER)
+  takenByUserId       String?
+  status              SalesOrderStatus  @default(DRAFT)
+  deliveryChannel     DeliveryChannel
+  customerReceiveMode CustomerReceiveMode?
+  destinationCityId   String?
+  /// Stock check before dispatch
+  stockCheckedAt      DateTime?
+  hasSufficientStock  Boolean?
+  stockCheckNotes     String?
+  /// When customer received goods
+  goodsReceivedAt     DateTime?
+  /// When sale became OK (full payment collected)
+  saleOkAt            DateTime?
+  notes               String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedAt           DateTime?
+
+  customer            Customer          @relation(fields: [customerId], references: [id])
+  takenBy             User?             @relation("SalesOrderTakenBy", fields: [takenByUserId], references: [id])
+  lines               SalesOrderLine[]
+  factoryOutbounds    FactoryOutbound[]
+  invoices            Invoice[]
+
+  @@index([customerId])
+  @@index([orderDate])
+  @@index([orderSource])
+  @@index([takenByUserId])
+  @@index([status])
+  @@index([deliveryChannel])
+  @@index([hasSufficientStock])
+  @@index([deletedAt])
+}
+
+model SalesOrderLine {
+  id           String    @id @default(cuid())
+  salesOrderId String
+  productSkuId String
+  unitId       String
+  quantity     Decimal   @db.Decimal(18, 4)
+  unitPriceMmk Decimal   @db.Decimal(18, 2)
+  lineTotalMmk Decimal   @db.Decimal(18, 2)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id])
+  productSku   ProductSku @relation(fields: [productSkuId], references: [id])
+  unit         Unit       @relation(fields: [unitId], references: [id])
+
+  @@index([salesOrderId])
+  @@index([productSkuId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 13. FACTORY OUTBOUND / DISTRIBUTION TRACKING
+// Qty + gate/direct path + optional driver/vehicle for the scheduled day.
+// Not full fleet GPS telemetry — just who/when took goods from factory.
+// =============================================================================
+
+model FactoryOutbound {
+  id                   String         @id @default(cuid())
+  outboundNumber       String         @unique
+  factoryId            String
+  salesOrderId         String?
+  /// Planned day driver goes to factory / drops goods
+  scheduledDate        DateTime       @db.Date
+  /// Actual outbound / drop date (may equal scheduledDate)
+  outboundDate         DateTime?      @db.Date
+  deliveryChannel      DeliveryChannel
+  status               OutboundStatus @default(READY_AT_FACTORY)
+  driverUserId         String?
+  /// Optional link to company vehicle asset (future-proof fleet)
+  vehicleAssetId       String?
+  /// Yangon car gate (when VIA_GATE)
+  yangonGateId         String?
+  /// Destination city branch gate
+  destinationGateId    String?
+  customerReceiveMode  CustomerReceiveMode?
+  departedFactoryAt    DateTime?
+  arrivedYangonGateAt  DateTime?
+  inTransitAt          DateTime?
+  arrivedDestinationAt DateTime?
+  /// Customer/shop received goods
+  receivedByCustomerAt DateTime?
+  notes                String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  deletedAt            DateTime?
+
+  factory              Factory        @relation(fields: [factoryId], references: [id])
+  salesOrder           SalesOrder?    @relation(fields: [salesOrderId], references: [id])
+  driver               User?          @relation("OutboundDriver", fields: [driverUserId], references: [id])
+  vehicleAsset         PhysicalAsset? @relation("OutboundVehicle", fields: [vehicleAssetId], references: [id])
+  yangonGate           Gate?          @relation("OutboundYangonGate", fields: [yangonGateId], references: [id])
+  destinationGate      Gate?          @relation("OutboundDestinationGate", fields: [destinationGateId], references: [id])
+  lines                FactoryOutboundLine[]
+  statusLogs           OutboundStatusLog[]
+
+  @@index([factoryId])
+  @@index([salesOrderId])
+  @@index([scheduledDate])
+  @@index([outboundDate])
+  @@index([status])
+  @@index([driverUserId])
+  @@index([vehicleAssetId])
+  @@index([yangonGateId])
+  @@index([destinationGateId])
+  @@index([deletedAt])
+}
+
+model FactoryOutboundLine {
+  id                String    @id @default(cuid())
+  factoryOutboundId String
+  productSkuId      String
+  unitId            String
+  quantity          Decimal   @db.Decimal(18, 4)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  factoryOutbound   FactoryOutbound @relation(fields: [factoryOutboundId], references: [id])
+  productSku        ProductSku      @relation(fields: [productSkuId], references: [id])
+  unit              Unit            @relation(fields: [unitId], references: [id])
+
+  @@index([factoryOutboundId])
+  @@index([productSkuId])
+  @@index([deletedAt])
+}
+
+model OutboundStatusLog {
+  id                String         @id @default(cuid())
+  factoryOutboundId String
+  fromStatus        OutboundStatus?
+  toStatus          OutboundStatus
+  changedAt         DateTime       @default(now())
+  notes             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+
+  factoryOutbound   FactoryOutbound @relation(fields: [factoryOutboundId], references: [id])
+
+  @@index([factoryOutboundId])
+  @@index([changedAt])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 14. INVOICING, PAYMENTS, PARTIALS, MULTI-INVOICE ALLOCATION (future-proof)
+// =============================================================================
+
+model Invoice {
+  id              String        @id @default(cuid())
+  invoiceNumber   String        @unique
+  customerId      String
+  salesOrderId    String?
+  issueDate       DateTime      @db.Date
+  dueDate         DateTime?     @db.Date
+  status          InvoiceStatus @default(DRAFT)
+  subtotalMmk     Decimal       @default(0) @db.Decimal(18, 2)
+  discountMmk     Decimal       @default(0) @db.Decimal(18, 2)
+  totalMmk        Decimal       @default(0) @db.Decimal(18, 2)
+  amountPaidMmk   Decimal       @default(0) @db.Decimal(18, 2)
+  balanceDueMmk   Decimal       @default(0) @db.Decimal(18, 2)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  salesOrder      SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+  lines           InvoiceLine[]
+  installments    InvoiceInstallment[]
+  paymentAllocations PaymentAllocation[]
+  collectionReminders CollectionReminder[]
+
+  @@index([customerId])
+  @@index([salesOrderId])
+  @@index([issueDate])
+  @@index([dueDate])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model InvoiceLine {
+  id           String    @id @default(cuid())
+  invoiceId    String
+  productSkuId String
+  unitId       String
+  quantity     Decimal   @db.Decimal(18, 4)
+  unitPriceMmk Decimal   @db.Decimal(18, 2)
+  lineTotalMmk Decimal   @db.Decimal(18, 2)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  invoice      Invoice   @relation(fields: [invoiceId], references: [id])
+  productSku   ProductSku @relation(fields: [productSkuId], references: [id])
+  unit         Unit      @relation(fields: [unitId], references: [id])
+
+  @@index([invoiceId])
+  @@index([productSkuId])
+  @@index([deletedAt])
+}
+
+/// Future-proof installment / payment plan rows per invoice
+model InvoiceInstallment {
+  id              String    @id @default(cuid())
+  invoiceId       String
+  sequenceNo      Int
+  dueDate         DateTime  @db.Date
+  amountDueMmk    Decimal   @db.Decimal(18, 2)
+  amountPaidMmk   Decimal   @default(0) @db.Decimal(18, 2)
+  isPaid          Boolean   @default(false)
+  paidAt          DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  invoice         Invoice   @relation(fields: [invoiceId], references: [id])
+  collectionReminders CollectionReminder[]
+
+  @@unique([invoiceId, sequenceNo])
+  @@index([dueDate])
+  @@index([isPaid])
+  @@index([deletedAt])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  paymentNumber   String        @unique
+  paymentDate     DateTime      @db.Date
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  amountMmk       Decimal       @db.Decimal(18, 2)
+  bankName        String?
+  bankReference   String?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  allocations     PaymentAllocation[]
+
+  @@index([paymentDate])
+  @@index([method])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+/// One payment can cover many invoices; one invoice can receive many payments
+model PaymentAllocation {
+  id            String    @id @default(cuid())
+  paymentId     String
+  invoiceId     String
+  amountMmk     Decimal   @db.Decimal(18, 2)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  payment       Payment   @relation(fields: [paymentId], references: [id])
+  invoice       Invoice   @relation(fields: [invoiceId], references: [id])
+
+  @@index([paymentId])
+  @@index([invoiceId])
+  @@index([deletedAt])
+}
+
+/// Scheduled ask-for-money / alarm on a day
+model CollectionReminder {
+  id                   String                   @id @default(cuid())
+  invoiceId            String
+  installmentId        String?
+  scheduledFor         DateTime
+  status               CollectionReminderStatus @default(SCHEDULED)
+  titleEn              String
+  titleMm              String?
+  messageEn            String?
+  messageMm            String?
+  assignedToUserId     String?
+  createdByUserId      String?
+  notifiedAt           DateTime?
+  completedAt          DateTime?
+  notes                String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  deletedAt            DateTime?
+
+  invoice              Invoice                  @relation(fields: [invoiceId], references: [id])
+  installment          InvoiceInstallment?      @relation(fields: [installmentId], references: [id])
+  assignedTo           User?                    @relation("ReminderAssignee", fields: [assignedToUserId], references: [id])
+  createdBy            User?                    @relation("ReminderCreator", fields: [createdByUserId], references: [id])
+
+  @@index([invoiceId])
+  @@index([installmentId])
+  @@index([scheduledFor])
+  @@index([status])
+  @@index([assignedToUserId])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 15. BUSINESS DEVELOPMENT — marketing plans, campaigns, brand awareness
+// Sales daily/monthly/yearly analysis = queries over orders/invoices/production
+// Optional snapshot tables below for cached analytics / BD planning
+// =============================================================================
+
+model MarketingPlan {
+  id          String              @id @default(cuid())
+  companyId   String
+  code        String              @unique
+  nameEn      String
+  nameMm      String?
+  status      MarketingPlanStatus @default(DRAFT)
+  startDate   DateTime            @db.Date
+  endDate     DateTime?           @db.Date
+  budgetMmk   Decimal?            @db.Decimal(18, 2)
+  objectivesEn String?
+  objectivesMm String?
+  notes       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+
+  company     Company             @relation(fields: [companyId], references: [id])
+  campaigns   MarketingCampaign[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@index([deletedAt])
+}
+
+model MarketingCampaign {
+  id              String         @id @default(cuid())
+  marketingPlanId String?
+  brandId         String?
+  code            String         @unique
+  nameEn          String
+  nameMm          String?
+  status          CampaignStatus @default(PLANNED)
+  channel         String?
+  startDate       DateTime       @db.Date
+  endDate         DateTime?      @db.Date
+  spendMmk        Decimal?       @db.Decimal(18, 2)
+  reachEstimate   Int?
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  marketingPlan   MarketingPlan? @relation(fields: [marketingPlanId], references: [id])
+  brand           Brand?         @relation(fields: [brandId], references: [id])
+  brandAwarenessRecords BrandAwarenessRecord[]
+
+  @@index([marketingPlanId])
+  @@index([brandId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+/// Future-proof brand awareness metrics (can later be filled from surveys/ads;
+/// current phase can still derive awareness proxies from sales reports)
+model BrandAwarenessRecord {
+  id           String    @id @default(cuid())
+  brandId      String
+  campaignId   String?
+  recordDate   DateTime  @db.Date
+  metricKey    String
+  metricValue  Decimal   @db.Decimal(18, 4)
+  source       String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  brand        Brand     @relation(fields: [brandId], references: [id])
+  campaign     MarketingCampaign? @relation(fields: [campaignId], references: [id])
+
+  @@index([brandId, recordDate])
+  @@index([campaignId])
+  @@index([metricKey])
+  @@index([deletedAt])
+}
+
+/// Optional cached rollups for BD dashboards (filled by jobs; source of truth remains transactional tables)
+model SalesDailySnapshot {
+  id                String    @id @default(cuid())
+  snapshotDate      DateTime  @db.Date
+  totalOrders       Int       @default(0)
+  totalCustomersSold Int      @default(0)
+  totalQtySold      Decimal   @default(0) @db.Decimal(18, 4)
+  totalSalesMmk     Decimal   @default(0) @db.Decimal(18, 2)
+  totalCollectedMmk Decimal   @default(0) @db.Decimal(18, 2)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  @@unique([snapshotDate])
+  @@index([deletedAt])
+}
+
+model ProductionDailySnapshot {
+  id                     String    @id @default(cuid())
+  snapshotDate           DateTime  @db.Date
+  totalSkuLines          Int       @default(0)
+  totalQuantityProduced  Decimal   @default(0) @db.Decimal(18, 4)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  deletedAt              DateTime?
+
+  @@unique([snapshotDate])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 16. DIGITAL ASSETS (Facebook page, website, …)
+// =============================================================================
+
+model DigitalAsset {
+  id           String           @id @default(cuid())
+  companyId    String
+  assetType    DigitalAssetType
+  nameEn       String
+  nameMm       String?
+  url          String?
+  platformHandle String?
+  ownerNotes   String?
+  acquiredAt   DateTime?
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  deletedAt    DateTime?
+
+  company      Company          @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([assetType])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+// =============================================================================
+// 17. PHYSICAL / OTHER BUSINESS ASSETS (detailed register)
+// Vehicles (fleet future-proof), machines, land, buildings, tanks, molds, …
+// =============================================================================
+
+model PhysicalAsset {
+  id                String           @id @default(cuid())
+  companyId         String
+  assetType         PhysicalAssetType
+  code              String           @unique
+  nameEn            String
+  nameMm            String?
+  descriptionEn     String?
+  descriptionMm     String?
+  /// Vehicle fields (optional)
+  plateNumber       String?
+  makeModel         String?
+  /// Location / custody
+  locatedAtEn       String?
+  locatedAtMm       String?
+  purchaseDate      DateTime?        @db.Date
+  purchasePriceMmk  Decimal?         @db.Decimal(18, 2)
+  bookValueMmk      Decimal?         @db.Decimal(18, 2)
+  /// Simple straight-line support (years)
+  usefulLifeYears   Int?
+  depreciationPerYearMmk Decimal?    @db.Decimal(18, 2)
+  condition         AssetCondition   @default(GOOD)
+  warrantyExpiry    DateTime?        @db.Date
+  serialNumber      String?
+  notes             String?
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+
+  company           Company          @relation(fields: [companyId], references: [id])
+  depreciationLogs  AssetDepreciationLog[]
+  factoryOutbounds  FactoryOutbound[] @relation("OutboundVehicle")
+
+  @@index([companyId])
+  @@index([assetType])
+  @@index([plateNumber])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model AssetDepreciationLog {
+  id               String    @id @default(cuid())
+  physicalAssetId  String
+  periodDate       DateTime  @db.Date
+  depreciationMmk  Decimal   @db.Decimal(18, 2)
+  bookValueAfterMmk Decimal  @db.Decimal(18, 2)
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  physicalAsset    PhysicalAsset @relation(fields: [physicalAssetId], references: [id])
+
+  @@index([physicalAssetId, periodDate])
+  @@index([deletedAt])
 }

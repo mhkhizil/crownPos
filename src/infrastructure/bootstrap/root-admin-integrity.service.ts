@@ -1,14 +1,53 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { hash } from 'bcrypt';
 import { PrismaService } from '../database/prisma.service.js';
-import { AdminPermission } from '../../domain/enums/admin-permission.enum.js';
+import { PermissionCode } from '../../domain/enums/permission-code.enum.js';
 
-const ROOT_ADMIN_ROLE_NAME = 'ROOT_ADMIN';
-const ROOT_ADMIN_DESCRIPTION = 'System root admin (bootstrapped)';
-
-const ROOT_ADMIN_PERMISSIONS: AdminPermission[] = [
-  AdminPermission.MANAGE_USERS,
-  AdminPermission.VIEW_ANALYTICS,
+const PERMISSION_DEFS: Array<{
+  code: PermissionCode;
+  module: string;
+  nameEn: string;
+}> = [
+  { code: PermissionCode.MANAGE_USERS, module: 'users', nameEn: 'Manage users' },
+  { code: PermissionCode.MANAGE_ROLES, module: 'roles', nameEn: 'Manage roles' },
+  {
+    code: PermissionCode.MANAGE_MASTER_DATA,
+    module: 'master',
+    nameEn: 'Manage master data',
+  },
+  {
+    code: PermissionCode.MANAGE_PRODUCTION,
+    module: 'production',
+    nameEn: 'Manage production',
+  },
+  {
+    code: PermissionCode.MANAGE_INVENTORY,
+    module: 'inventory',
+    nameEn: 'Manage inventory',
+  },
+  { code: PermissionCode.MANAGE_SALES, module: 'sales', nameEn: 'Manage sales' },
+  {
+    code: PermissionCode.MANAGE_OUTBOUND,
+    module: 'outbound',
+    nameEn: 'Manage outbound',
+  },
+  {
+    code: PermissionCode.MANAGE_BILLING,
+    module: 'billing',
+    nameEn: 'Manage billing',
+  },
+  {
+    code: PermissionCode.MANAGE_PRICING,
+    module: 'pricing',
+    nameEn: 'Manage pricing',
+  },
+  { code: PermissionCode.MANAGE_BD, module: 'bd', nameEn: 'Manage business development' },
+  {
+    code: PermissionCode.VIEW_ANALYTICS,
+    module: 'analytics',
+    nameEn: 'View analytics',
+  },
 ];
 
 @Injectable()
@@ -21,89 +60,71 @@ export class RootAdminIntegrityService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    const rootRole = await this.prisma.adminRole.upsert({
-      where: { name: ROOT_ADMIN_ROLE_NAME },
-      create: {
-        name: ROOT_ADMIN_ROLE_NAME,
-        description: ROOT_ADMIN_DESCRIPTION,
-        isSystem: true,
-        permissions: {
-          createMany: {
-            data: ROOT_ADMIN_PERMISSIONS.map((permission) => ({ permission })),
+    for (const p of PERMISSION_DEFS) {
+      const existing = await this.prisma.permission.findFirst({
+        where: { code: p.code },
+      });
+      if (existing) {
+        await this.prisma.permission.update({
+          where: { id: existing.id },
+          data: {
+            module: p.module,
+            nameEn: p.nameEn,
+            deletedAt: null,
           },
-        },
-      },
-      update: {
-        description: ROOT_ADMIN_DESCRIPTION,
-        isSystem: true,
-        permissions: {
-          deleteMany: {},
-          createMany: {
-            data: ROOT_ADMIN_PERMISSIONS.map((permission) => ({ permission })),
+        });
+      } else {
+        await this.prisma.permission.create({
+          data: {
+            code: p.code,
+            module: p.module,
+            nameEn: p.nameEn,
           },
-        },
-      },
-      include: {
-        permissions: true,
-      },
-    });
-
-    const rootEmail = this.configService.get<string>(
-      'ROOT_ADMIN_EMAIL',
-      'admin@example.com',
-    );
-    const rootPhone = this.configService.get<string>(
-      'ROOT_ADMIN_PHONE',
-      '+959000000000',
-    );
-    const rootNickname = this.configService.get<string>(
-      'ROOT_ADMIN_NICKNAME',
-      'Root Admin',
-    );
-
-    const rootUser =
-      (await this.prisma.user.findFirst({
-        where: {
-          OR: [{ email: rootEmail }, { phone: rootPhone }],
-        },
-        select: { id: true },
-      })) ??
-      (await this.prisma.user.findFirst({
-        where: {
-          adminRole: {
-            isSystem: true,
-            name: ROOT_ADMIN_ROLE_NAME,
-          },
-        },
-        select: { id: true },
-      }));
-
-    if (!rootUser) {
-      throw new Error(
-        'ROOT_ADMIN user is missing. Run prisma seed or restore the root admin account before starting the app.',
-      );
+        });
+      }
     }
 
-    await this.prisma.user.update({
-      where: {
-        id: rootUser.id,
-      },
-      data: {
-        email: rootEmail,
-        phone: rootPhone,
-        nickname: rootNickname,
-        adminRoleId: rootRole.id,
-        isActive: true,
-        isBanned: false,
-        isEmailVerified: true,
-        isPhoneVerified: true,
-        emailVerifiedAt: new Date(),
-        phoneVerifiedAt: new Date(),
-      },
+    const rootEmail = (
+      this.configService.get<string>('ROOT_ADMIN_EMAIL') ??
+      'mhkhizilthurainzaw@gmail.com'
+    )
+      .trim()
+      .toLowerCase();
+    const rootPassword =
+      this.configService.get<string>('ROOT_ADMIN_PASSWORD') ?? 'root123';
+    const rootName =
+      this.configService.get<string>('ROOT_ADMIN_NAME') ??
+      this.configService.get<string>('ROOT_ADMIN_NICKNAME') ??
+      'Root Admin';
+
+    let root = await this.prisma.user.findFirst({
+      where: { OR: [{ email: rootEmail }, { isRoot: true }], deletedAt: null },
     });
 
-    this.logger.log(
-      `ROOT_ADMIN integrity ensured for role ${rootRole.id} and user ${rootUser.id}`,
-    );
+    if (!root) {
+      const passwordHash = await hash(rootPassword, 10);
+      root = await this.prisma.user.create({
+        data: {
+          email: rootEmail,
+          passwordHash,
+          nameEn: rootName,
+          isRoot: true,
+          status: 'ACTIVE',
+        },
+      });
+      this.logger.log(`Created root user ${root.id} (${rootEmail})`);
+    } else {
+      await this.prisma.user.update({
+        where: { id: root.id },
+        data: {
+          email: rootEmail,
+          nameEn: rootName,
+          isRoot: true,
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
+      });
+      this.logger.log(`ROOT integrity ensured for user ${root.id}`);
+    }
   }
 }

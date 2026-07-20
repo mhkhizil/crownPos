@@ -1,45 +1,29 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Inject,
-  Injectable,
-} from '@nestjs/common';
-import {
-  ADMIN_ROLE_REPOSITORY,
-  type IAdminRoleRepository,
-} from '../../../domain/repositories/admin-role.repository.interface.js';
-import type { CreateAdminRoleDto } from '../../dtos/admin-roles/create-admin-role.dto.js';
-import { AdminRoleDto } from '../../dtos/admin-roles/admin-role.dto.js';
-import { assertRootAdmin } from './_helpers.js';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { USER_REPOSITORY } from '../../../domain/repositories/user.repository.interface.js';
+import type { IUserRepository } from '../../../domain/repositories/user.repository.interface.js';
+import { ROLE_REPOSITORY } from '../../../domain/repositories/role.repository.interface.js';
+import type { IRoleRepository } from '../../../domain/repositories/role.repository.interface.js';
+import { requireRoot } from '../_helpers/admin-authorization.helper.js';
+import { CreateAdminRoleDto } from '../../dtos/admin-roles/create-admin-role.dto.js';
 
 @Injectable()
 export class CreateAdminRoleUseCase {
   constructor(
-    @Inject(ADMIN_ROLE_REPOSITORY)
-    private readonly roles: IAdminRoleRepository,
+    @Inject(USER_REPOSITORY) private readonly users: IUserRepository,
+    @Inject(ROLE_REPOSITORY) private readonly roles: IRoleRepository,
   ) {}
 
-  async execute(
-    rootAdminId: string,
-    dto: CreateAdminRoleDto,
-  ): Promise<AdminRoleDto> {
-    await assertRootAdmin(this.roles, rootAdminId);
-
-    const normalizedName = dto.name.trim().toUpperCase();
-    if (normalizedName === 'ROOT_ADMIN') {
-      throw new BadRequestException('ROOT_ADMIN role is system-managed');
+  async execute(actorUserId: string, dto: CreateAdminRoleDto) {
+    await requireRoot(this.users, actorUserId);
+    if (!dto.permissionIds?.length) {
+      throw new BadRequestException('At least one permission is required');
     }
-
-    const existing = await this.roles.findByName(normalizedName);
-    if (existing) {
-      throw new ConflictException('Admin role name already exists');
-    }
-
-    const created = await this.roles.create({
-      name: normalizedName,
-      description: dto.description?.trim() || undefined,
-      permissions: dto.permissions,
+    return this.roles.createRole({
+      code: dto.code,
+      nameEn: dto.nameEn,
+      nameMm: dto.nameMm,
+      description: dto.description,
+      permissionIds: dto.permissionIds,
     });
-    return new AdminRoleDto(created);
   }
 }

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsArray,
   IsEmail,
   IsNotEmpty,
   IsOptional,
@@ -8,28 +9,33 @@ import {
 } from 'class-validator';
 
 export class CreateAdminUserDto {
-  @ApiProperty({ example: 'Staff Manager' })
-  @IsString()
-  @IsNotEmpty()
-  nickname: string;
-
-  @ApiProperty({ example: '+959987654321' })
-  @IsString()
-  @IsNotEmpty()
-  phone: string;
-
   @ApiProperty({ example: 'staff@example.com' })
   @IsEmail()
-  @IsNotEmpty()
   email: string;
 
-  @ApiProperty({ example: 'securePass123', minLength: 8 })
+  @ApiProperty({ example: 'ChangeMe123!' })
   @IsString()
-  @MinLength(8)
+  @MinLength(6)
   password: string;
 
-  @ApiProperty({ example: 'ROLE_ID_UUID', description: 'Admin role ID to assign' })
+  @ApiProperty({ example: 'Sales Staff' })
   @IsString()
   @IsNotEmpty()
-  adminRoleId: string;
+  nameEn: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  nameMm?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Role IDs to assign' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  roleIds?: string[];
 }

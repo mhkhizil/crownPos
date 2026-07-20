@@ -17,33 +17,35 @@ function buildUserRepository(): jest.Mocked<IUserRepository> {
 }
 
 describe(JwtStrategy.name, () => {
-  it('accepts active users with matching auth token version', async () => {
+  it('accepts active staff users', async () => {
     const config = buildConfigService();
     const userRepository = buildUserRepository();
     userRepository.findById.mockResolvedValue({
+      email: 'staff@example.com',
+      phone: null,
       isActiveUser: () => true,
-      authTokenVersion: 3,
     } as never);
 
     const strategy = new JwtStrategy(config, userRepository);
 
     await expect(
-      strategy.validate({ sub: 'user-1', phone: '+959123456789', authTokenVersion: 3 }),
-    ).resolves.toEqual({ sub: 'user-1', phone: '+959123456789' });
+      strategy.validate({ sub: 'user-1', email: 'staff@example.com' }),
+    ).resolves.toEqual({
+      sub: 'user-1',
+      email: 'staff@example.com',
+      phone: '',
+    });
   });
 
-  it('rejects revoked sessions', async () => {
+  it('rejects missing users', async () => {
     const config = buildConfigService();
     const userRepository = buildUserRepository();
-    userRepository.findById.mockResolvedValue({
-      isActiveUser: () => true,
-      authTokenVersion: 4,
-    } as never);
+    userRepository.findById.mockResolvedValue(null);
 
     const strategy = new JwtStrategy(config, userRepository);
 
     await expect(
-      strategy.validate({ sub: 'user-1', phone: '+959123456789', authTokenVersion: 3 }),
+      strategy.validate({ sub: 'user-1', email: 'staff@example.com' }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
@@ -51,14 +53,15 @@ describe(JwtStrategy.name, () => {
     const config = buildConfigService();
     const userRepository = buildUserRepository();
     userRepository.findById.mockResolvedValue({
+      email: 'staff@example.com',
+      phone: null,
       isActiveUser: () => false,
-      authTokenVersion: 0,
     } as never);
 
     const strategy = new JwtStrategy(config, userRepository);
 
     await expect(
-      strategy.validate({ sub: 'user-1', phone: '+959123456789' }),
+      strategy.validate({ sub: 'user-1', email: 'staff@example.com' }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

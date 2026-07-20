@@ -1,21 +1,20 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { AdminPermission } from '../../../domain/enums/admin-permission.enum.js';
-import {
-  ADMIN_ROLE_REPOSITORY,
-  type IAdminRoleRepository,
-} from '../../../domain/repositories/admin-role.repository.interface.js';
-import { AdminPermissionListDto } from '../../dtos/admin-roles/admin-permission-list.dto.js';
-import { assertRootAdmin } from './_helpers.js';
+import { USER_REPOSITORY } from '../../../domain/repositories/user.repository.interface.js';
+import type { IUserRepository } from '../../../domain/repositories/user.repository.interface.js';
+import { ROLE_REPOSITORY } from '../../../domain/repositories/role.repository.interface.js';
+import type { IRoleRepository } from '../../../domain/repositories/role.repository.interface.js';
+import { requirePermission } from '../_helpers/admin-authorization.helper.js';
+import { PermissionCode } from '../../../domain/enums/permission-code.enum.js';
 
 @Injectable()
 export class ListAdminPermissionsUseCase {
   constructor(
-    @Inject(ADMIN_ROLE_REPOSITORY)
-    private readonly roles: IAdminRoleRepository,
+    @Inject(USER_REPOSITORY) private readonly users: IUserRepository,
+    @Inject(ROLE_REPOSITORY) private readonly roles: IRoleRepository,
   ) {}
 
-  async execute(rootAdminId: string): Promise<AdminPermissionListDto> {
-    await assertRootAdmin(this.roles, rootAdminId);
-    return new AdminPermissionListDto(Object.values(AdminPermission));
+  async execute(actorUserId: string) {
+    await requirePermission(this.users, actorUserId, PermissionCode.MANAGE_ROLES);
+    return this.roles.listPermissions();
   }
 }

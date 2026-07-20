@@ -4,43 +4,59 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { UserEntity } from '../../../domain/entities/user.entity.js';
-import { AdminPermission } from '../../../domain/enums/admin-permission.enum.js';
+import { PermissionCode } from '../../../domain/enums/permission-code.enum.js';
 import type { IUserRepository } from '../../../domain/repositories/user.repository.interface.js';
 
-export async function requireActiveAdmin(
+export async function requireActiveStaff(
   users: IUserRepository,
   userId: string,
-  notFoundMessage = 'Admin user not found',
+  notFoundMessage = 'Staff user not found',
 ): Promise<UserEntity> {
-  const admin = await users.findById(userId);
-  if (!admin) {
+  const user = await users.findById(userId);
+  if (!user) {
     throw new NotFoundException(notFoundMessage);
   }
-  if (!admin.isActiveUser()) {
-    throw new UnauthorizedException('Account is deactivated or banned');
+  if (!user.isActiveUser()) {
+    throw new UnauthorizedException('Account is deactivated or suspended');
   }
-  if (!admin.isAdmin()) {
-    throw new ForbiddenException('Only admin users can perform this action');
-  }
-  return admin;
+  return user;
 }
 
-export async function requireAdminPermission(
+/** @deprecated Use requireActiveStaff */
+export const requireActiveAdmin = requireActiveStaff;
+
+export async function requireRoot(
   users: IUserRepository,
   userId: string,
-  permission: AdminPermission,
-  notFoundMessage = 'Admin user not found',
 ): Promise<UserEntity> {
-  const admin = await requireActiveAdmin(users, userId, notFoundMessage);
-  const role = await users.getAdminRoleByUserId(userId);
-  if (!role) {
-    throw new ForbiddenException('Admin role not found for this user');
+  const user = await requireActiveStaff(users, userId);
+  if (!user.isRoot) {
+    throw new ForbiddenException('Only root can perform this action');
   }
-  if (role.isSystem && role.name === 'ROOT_ADMIN') {
-    return admin;
-  }
-  if (!role.permissions.includes(permission)) {
-    throw new ForbiddenException(`Missing admin permission: ${permission}`);
-  }
-  return admin;
+  return user;
 }
+
+export async function assertRootAdmin(user: UserEntity): Promise<void> {
+  if (!user.isRoot) {
+    throw new ForbiddenException('Only root can perform this action');
+  }
+}
+
+export async function requirePermission(
+  users: IUserRepository,
+  userId: string,
+  permission: PermissionCode | string,
+): Promise<UserEntity> {
+  const user = await requireActiveStaff(users, userId);
+  if (user.isRoot) {
+    return user;
+  }
+  const auth = await users.getAuthDataByUserId(userId);
+  if (!auth || !auth.permissionCodes.includes(permission)) {
+    throw new ForbiddenException(`Missing permission: ${permission}`);
+  }
+  return user;
+}
+
+/** @deprecated Use requirePermission */
+export const requireAdminPermission = requirePermission;

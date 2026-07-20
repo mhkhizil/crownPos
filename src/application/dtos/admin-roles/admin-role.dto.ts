@@ -1,13 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { AdminPermission } from '../../../domain/enums/admin-permission.enum.js';
-import type { AdminRoleData } from '../../../domain/repositories/admin-role.repository.interface.js';
+import type { RoleEntity } from '../../../domain/entities/role.entity.js';
 
 export class AdminRoleDto {
   @ApiProperty()
   id: string;
 
   @ApiProperty()
-  name: string;
+  code: string;
+
+  @ApiProperty()
+  nameEn: string;
+
+  @ApiProperty({ nullable: true })
+  nameMm: string | null;
 
   @ApiProperty({ nullable: true })
   description: string | null;
@@ -15,22 +20,24 @@ export class AdminRoleDto {
   @ApiProperty()
   isSystem: boolean;
 
-  @ApiProperty({ enum: AdminPermission, isArray: true })
-  permissions: AdminPermission[];
+  @ApiProperty({ type: [String] })
+  permissionIds: string[];
 
-  @ApiProperty()
-  createdAt: Date;
+  @ApiProperty({ type: [String] })
+  permissionCodes: string[];
 
-  @ApiProperty()
-  updatedAt: Date;
+  constructor(role: RoleEntity) {
+    this.id = role.id;
+    this.code = role.code;
+    this.nameEn = role.nameEn;
+    this.nameMm = role.nameMm;
+    this.description = role.description;
+    this.isSystem = role.isSystem;
+    this.permissionIds = role.permissionIds;
+    this.permissionCodes = role.permissionCodes;
+  }
 
-  constructor(data: AdminRoleData) {
-    this.id = data.id;
-    this.name = data.name;
-    this.description = data.description;
-    this.isSystem = data.isSystem;
-    this.permissions = data.permissions;
-    this.createdAt = data.createdAt;
-    this.updatedAt = data.updatedAt;
+  static fromEntity(role: RoleEntity): AdminRoleDto {
+    return new AdminRoleDto(role);
   }
 }

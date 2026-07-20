@@ -1,0 +1,7 @@
+export enum CollectionReminderStatus {
+  SCHEDULED = 'SCHEDULED',
+  NOTIFIED = 'NOTIFIED',
+  ACKNOWLEDGED = 'ACKNOWLEDGED',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}

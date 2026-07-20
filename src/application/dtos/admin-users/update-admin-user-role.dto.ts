@@ -1,8 +1,10 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsNotEmpty } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { ArrayUnique, IsArray, IsString } from 'class-validator';
 
 export class UpdateAdminUserRoleDto {
-  @ApiProperty({ example: 'ROLE_ID_UUID', description: 'New admin role ID to assign. Set to null to demote to client.' })
-  @IsString()
-  adminRoleId: string;
+  @ApiProperty({ type: [String], description: 'Replace user roles with these role IDs' })
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  roleIds: string[];
 }

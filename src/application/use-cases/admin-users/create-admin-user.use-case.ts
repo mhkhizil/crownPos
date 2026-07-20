@@ -1,94 +1,40 @@
-import {
-  ConflictException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { hash } from 'bcrypt';
-import {
-  USER_REPOSITORY,
-  type IUserRepository,
-} from '../../../domain/repositories/user.repository.interface.js';
-import {
-  ADMIN_ROLE_REPOSITORY,
-  type IAdminRoleRepository,
-} from '../../../domain/repositories/admin-role.repository.interface.js';
-import type { CreateAdminUserDto } from '../../dtos/admin-users/create-admin-user.dto.js';
+import { USER_REPOSITORY } from '../../../domain/repositories/user.repository.interface.js';
+import type { IUserRepository } from '../../../domain/repositories/user.repository.interface.js';
+import { requireRoot } from '../_helpers/admin-authorization.helper.js';
+import { CreateAdminUserDto } from '../../dtos/admin-users/create-admin-user.dto.js';
 import { AdminUserListDto } from '../../dtos/admin-users/admin-user-list.dto.js';
-import { assertRootAdmin } from '../admin-roles/_helpers.js';
+import { normalizeEmail } from '../../../common/utils/normalize-email.js';
 
 @Injectable()
 export class CreateAdminUserUseCase {
-  private readonly logger = new Logger(CreateAdminUserUseCase.name);
-
   constructor(
-    @Inject(USER_REPOSITORY)
-    private readonly userRepository: IUserRepository,
-    @Inject(ADMIN_ROLE_REPOSITORY)
-    private readonly adminRoleRepository: IAdminRoleRepository,
+    @Inject(USER_REPOSITORY) private readonly users: IUserRepository,
   ) {}
 
   async execute(
-    rootAdminId: string,
+    actorUserId: string,
     dto: CreateAdminUserDto,
   ): Promise<AdminUserListDto> {
-    await assertRootAdmin(this.adminRoleRepository, rootAdminId);
-
-    const matchedRole = await this.adminRoleRepository.findById(
-      dto.adminRoleId,
-    );
-    if (!matchedRole) {
-      throw new NotFoundException('Admin role not found');
+    await requireRoot(this.users, actorUserId);
+    const email = normalizeEmail(dto.email);
+    const existing = await this.users.findByEmail(email);
+    if (existing) {
+      throw new ConflictException('Email already in use');
     }
-
-    const [existingPhone, existingEmail] = await Promise.all([
-      this.userRepository.findByPhone(dto.phone),
-      this.userRepository.findByEmail(dto.email),
-    ]);
-
-    if (existingPhone) {
-      throw new ConflictException(
-        'A user with this phone number already exists',
-      );
-    }
-
-    if (existingEmail) {
-      throw new ConflictException('A user with this email already exists');
-    }
-
-    const hashedPassword = await hash(dto.password, 12);
-
-    const createdUser = await this.userRepository.create({
+    const passwordHash = await hash(dto.password, 10);
+    const user = await this.users.create({
+      email,
+      passwordHash,
+      nameEn: dto.nameEn,
+      nameMm: dto.nameMm,
       phone: dto.phone,
-      email: dto.email,
-      password: hashedPassword,
-      nickname: dto.nickname,
     });
-
-    await this.userRepository.update(createdUser.id, {
-      adminRoleId: matchedRole.id,
-      isEmailVerified: true,
-      isPhoneVerified: true,
-      emailVerifiedAt: new Date(),
-      phoneVerifiedAt: new Date(),
-    });
-
-    this.logger.log(
-      `Admin user created: ${createdUser.id} with role ${matchedRole.name}`,
-    );
-
-    return new AdminUserListDto({
-      id: createdUser.id,
-      nickname: createdUser.nickname,
-      phone: createdUser.phone,
-      email: createdUser.email,
-      isActive: createdUser.isActive,
-      isBanned: createdUser.isBanned,
-      adminRoleId: matchedRole.id,
-      adminRoleName: matchedRole.name,
-      createdAt: createdUser.createdAt,
-      updatedAt: createdUser.updatedAt,
-    });
+    if (dto.roleIds?.length) {
+      await this.users.setUserRoles(user.id, dto.roleIds);
+    }
+    const auth = await this.users.getAuthDataByUserId(user.id);
+    return AdminUserListDto.fromAuth(auth!);
   }
 }

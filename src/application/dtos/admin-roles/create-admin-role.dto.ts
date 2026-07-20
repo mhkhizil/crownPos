@@ -3,29 +3,41 @@ import {
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
-  IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
-import { AdminPermission } from '../../../domain/enums/admin-permission.enum.js';
 
 export class CreateAdminRoleDto {
-  @ApiProperty({ example: 'CONTENT_MODERATOR' })
+  @ApiProperty({ example: 'SALES_MANAGER' })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(64)
-  name: string;
+  code: string;
 
-  @ApiPropertyOptional({ example: 'Moderates reports and suggestions only' })
+  @ApiProperty({ example: 'Sales Manager' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  nameEn: string;
+
+  @ApiPropertyOptional({ example: 'အရောင်းမန်နေဂျာ' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  nameMm?: string;
+
+  @ApiPropertyOptional({ example: 'Manages sales workflows' })
   @IsOptional()
   @IsString()
   @MaxLength(255)
   description?: string;
 
-  @ApiProperty({ enum: AdminPermission, isArray: true })
+  @ApiProperty({ example: ['permission-id-1', 'permission-id-2'] })
   @IsArray()
   @ArrayNotEmpty()
   @ArrayUnique()
-  @IsEnum(AdminPermission, { each: true })
-  permissions: AdminPermission[];
+  @IsString({ each: true })
+  permissionIds: string[];
 }

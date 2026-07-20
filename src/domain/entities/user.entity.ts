@@ -1,68 +1,57 @@
+import { UserStatus } from '../enums/user-status.enum.js';
+
 export interface UserEntityProps {
   id: string;
-  phone: string;
-  email: string | null;
-  password: string;
-  nickname: string;
-  avatar: string | null;
-  isEmailVerified: boolean;
-  isPhoneVerified: boolean;
-  emailVerifiedAt: Date | null;
-  phoneVerifiedAt: Date | null;
-  isActive: boolean;
-  isBanned: boolean;
-  adminRoleId: string | null;
-  authTokenVersion?: number;
+  companyId: string | null;
+  email: string;
+  passwordHash: string;
+  nameEn: string;
+  nameMm: string | null;
+  phone: string | null;
+  isRoot: boolean;
+  status: UserStatus;
+  lastLoginAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  deletedAt: Date | null;
 }
 
 export class UserEntity {
   readonly id: string;
-  readonly phone: string;
-  readonly email: string | null;
-  readonly password: string;
-  readonly nickname: string;
-  readonly avatar: string | null;
-  readonly isEmailVerified: boolean;
-  readonly isPhoneVerified: boolean;
-  readonly emailVerifiedAt: Date | null;
-  readonly phoneVerifiedAt: Date | null;
-  readonly isActive: boolean;
-  readonly isBanned: boolean;
-  readonly adminRoleId: string | null;
-  readonly authTokenVersion: number;
+  readonly companyId: string | null;
+  readonly email: string;
+  readonly passwordHash: string;
+  readonly nameEn: string;
+  readonly nameMm: string | null;
+  readonly phone: string | null;
+  readonly isRoot: boolean;
+  readonly status: UserStatus;
+  readonly lastLoginAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  readonly deletedAt: Date | null;
 
   constructor(props: UserEntityProps) {
     this.id = props.id;
-    this.phone = props.phone;
+    this.companyId = props.companyId;
     this.email = props.email;
-    this.password = props.password;
-    this.nickname = props.nickname;
-    this.avatar = props.avatar;
-    this.isEmailVerified = props.isEmailVerified;
-    this.isPhoneVerified = props.isPhoneVerified;
-    this.emailVerifiedAt = props.emailVerifiedAt;
-    this.phoneVerifiedAt = props.phoneVerifiedAt;
-    this.isActive = props.isActive;
-    this.isBanned = props.isBanned;
-    this.adminRoleId = props.adminRoleId;
-    this.authTokenVersion = props.authTokenVersion ?? 0;
+    this.passwordHash = props.passwordHash;
+    this.nameEn = props.nameEn;
+    this.nameMm = props.nameMm;
+    this.phone = props.phone;
+    this.isRoot = props.isRoot;
+    this.status = props.status;
+    this.lastLoginAt = props.lastLoginAt;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
+    this.deletedAt = props.deletedAt;
   }
 
   isActiveUser(): boolean {
-    return this.isActive && !this.isBanned;
+    return this.status === UserStatus.ACTIVE && this.deletedAt === null;
   }
 
-  isVerified(): boolean {
-    return this.isPhoneVerified && this.isEmailVerified;
-  }
-
-  isAdmin(): boolean {
-    return this.adminRoleId !== null;
+  isStaff(): boolean {
+    return this.isActiveUser();
   }
 }

@@ -3,14 +3,15 @@ import type { Request } from 'express';
 
 export interface JwtPayload {
   sub: string;
-  phone: string;
+  email: string;
+  phone?: string;
 }
 
 export const CurrentUser = createParamDecorator(
   (
     data: keyof JwtPayload | undefined,
     ctx: ExecutionContext,
-  ): JwtPayload | string => {
+  ): JwtPayload | string | undefined => {
     const request = ctx
       .switchToHttp()
       .getRequest<Request & { user: JwtPayload }>();

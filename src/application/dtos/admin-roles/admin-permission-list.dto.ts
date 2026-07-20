@@ -1,11 +1,31 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { AdminPermission } from '../../../domain/enums/admin-permission.enum.js';
+import type { PermissionEntity } from '../../../domain/entities/role.entity.js';
 
 export class AdminPermissionListDto {
-  @ApiProperty({ enum: AdminPermission, isArray: true })
-  permissions: AdminPermission[];
+  @ApiProperty()
+  id: string;
 
-  constructor(permissions: AdminPermission[]) {
-    this.permissions = permissions;
+  @ApiProperty()
+  code: string;
+
+  @ApiProperty()
+  module: string;
+
+  @ApiProperty()
+  nameEn: string;
+
+  @ApiProperty({ nullable: true })
+  nameMm: string | null;
+
+  constructor(p: PermissionEntity) {
+    this.id = p.id;
+    this.code = p.code;
+    this.module = p.module;
+    this.nameEn = p.nameEn;
+    this.nameMm = p.nameMm;
+  }
+
+  static fromEntity(p: PermissionEntity): AdminPermissionListDto {
+    return new AdminPermissionListDto(p);
   }
 }

@@ -1,57 +1,45 @@
 import { ApiProperty } from '@nestjs/swagger';
+import type { UserAuthData } from '../../../domain/repositories/user.repository.interface.js';
 
 export class AdminUserListDto {
   @ApiProperty()
   id: string;
 
   @ApiProperty()
-  nickname: string;
+  email: string;
 
   @ApiProperty()
-  phone: string;
+  nameEn: string;
 
   @ApiProperty({ nullable: true })
-  email: string | null;
-
-  @ApiProperty()
-  isActive: boolean;
-
-  @ApiProperty()
-  isBanned: boolean;
+  nameMm: string | null;
 
   @ApiProperty({ nullable: true })
-  adminRoleId: string | null;
-
-  @ApiProperty({ nullable: true })
-  adminRoleName: string | null;
+  phone: string | null;
 
   @ApiProperty()
-  createdAt: Date;
+  isRoot: boolean;
 
   @ApiProperty()
-  updatedAt: Date;
+  status: string;
 
-  constructor(data: {
-    id: string;
-    nickname: string;
-    phone: string;
-    email: string | null;
-    isActive: boolean;
-    isBanned: boolean;
-    adminRoleId: string | null;
-    adminRoleName: string | null;
-    createdAt: Date;
-    updatedAt: Date;
-  }) {
-    this.id = data.id;
-    this.nickname = data.nickname;
-    this.phone = data.phone;
-    this.email = data.email;
-    this.isActive = data.isActive;
-    this.isBanned = data.isBanned;
-    this.adminRoleId = data.adminRoleId;
-    this.adminRoleName = data.adminRoleName;
-    this.createdAt = data.createdAt;
-    this.updatedAt = data.updatedAt;
+  @ApiProperty({ type: [String] })
+  roleCodes: string[];
+
+  @ApiProperty({ type: [String] })
+  permissionCodes: string[];
+
+  static fromAuth(auth: UserAuthData): AdminUserListDto {
+    const dto = new AdminUserListDto();
+    dto.id = auth.user.id;
+    dto.email = auth.user.email;
+    dto.nameEn = auth.user.nameEn;
+    dto.nameMm = auth.user.nameMm;
+    dto.phone = auth.user.phone;
+    dto.isRoot = auth.user.isRoot;
+    dto.status = auth.user.status;
+    dto.roleCodes = auth.roles.map((r) => r.code);
+    dto.permissionCodes = auth.permissionCodes;
+    return dto;
   }
 }

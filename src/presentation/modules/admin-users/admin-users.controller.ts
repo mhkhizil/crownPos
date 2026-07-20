@@ -6,7 +6,6 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
@@ -102,7 +101,7 @@ export class AdminUsersController {
     return ApiResponseDto.success(result, 'Admin user created');
   }
 
-  @Patch(':userId/role')
+  @Patch(':userId/roles')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Change admin user role',
@@ -126,7 +125,7 @@ export class AdminUsersController {
   })
   async updateRole(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', ParseUUIDPipe) userId: string,
+    @Param('userId') userId: string,
     @Body() dto: UpdateAdminUserRoleDto,
   ): Promise<ApiResponseDto<AdminUserListDto>> {
     const result = await this.updateAdminUserRole.execute(
@@ -137,23 +136,19 @@ export class AdminUsersController {
     return ApiResponseDto.success(result, 'Admin user role updated');
   }
 
-  @Delete(':userId/role')
+  @Delete(':userId/roles')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Demote admin user to client (remove admin role)',
+    summary: 'Clear all roles from staff user',
     description: `## Demote admin user\n\n${ADMIN_USER_MANAGEMENT_WORKFLOW}\n\n${ADMIN_USER_DEMOTE_DOC}`,
   })
   @ApiSuccessResponse(AdminUserListDto, {
     status: HttpStatus.OK,
-    description: 'Admin user demoted to client',
+    description: 'Staff roles cleared',
   })
   @ApiErrorResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'User not found',
-  })
-  @ApiErrorResponse({
-    status: HttpStatus.BAD_REQUEST,
-    description: 'Cannot demote yourself or user is not an admin',
   })
   @ApiErrorResponse({
     status: HttpStatus.FORBIDDEN,
@@ -161,9 +156,9 @@ export class AdminUsersController {
   })
   async demote(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', ParseUUIDPipe) userId: string,
+    @Param('userId') userId: string,
   ): Promise<ApiResponseDto<AdminUserListDto>> {
     const result = await this.demoteAdminUser.execute(user.sub, userId);
-    return ApiResponseDto.success(result, 'Admin user demoted');
+    return ApiResponseDto.success(result, 'Staff roles cleared');
   }
 }

@@ -43,7 +43,7 @@ export class AdminRolesController {
   @ApiOperation({
     summary: 'List admin roles with permissions',
     description:
-      'Accessible by ROOT_ADMIN only. Includes static ROOT_ADMIN role and dynamic custom roles.',
+      'Accessible by root users only. Includes system and custom roles.',
   })
   @ApiArraySuccessResponse(AdminRoleDto, {
     status: HttpStatus.OK,
@@ -57,7 +57,10 @@ export class AdminRolesController {
     @CurrentUser() user: JwtPayload,
   ): Promise<ApiResponseDto<AdminRoleDto[]>> {
     const roles = await this.listAdminRoles.execute(user.sub);
-    return ApiResponseDto.success(roles, 'Admin roles retrieved');
+    return ApiResponseDto.success(
+      roles.map((r) => new AdminRoleDto(r)),
+      'Admin roles retrieved',
+    );
   }
 
   @Get('permissions')
@@ -65,17 +68,20 @@ export class AdminRolesController {
   @ApiOperation({
     summary: 'List available admin permissions',
     description:
-      'Accessible by ROOT_ADMIN only. This can be used by dashboard forms when creating custom admin roles.',
+      'Accessible by root users only. This can be used by dashboard forms when creating custom roles.',
   })
-  @ApiSuccessResponse(AdminPermissionListDto, {
+  @ApiArraySuccessResponse(AdminPermissionListDto, {
     status: HttpStatus.OK,
     description: 'Admin permissions retrieved',
   })
   async permissions(
     @CurrentUser() user: JwtPayload,
-  ): Promise<ApiResponseDto<AdminPermissionListDto>> {
+  ): Promise<ApiResponseDto<AdminPermissionListDto[]>> {
     const data = await this.listAdminPermissions.execute(user.sub);
-    return ApiResponseDto.success(data, 'Admin permissions retrieved');
+    return ApiResponseDto.success(
+      data.map((p) => new AdminPermissionListDto(p)),
+      'Admin permissions retrieved',
+    );
   }
 
   @Post()
@@ -102,6 +108,6 @@ export class AdminRolesController {
     @Body() dto: CreateAdminRoleDto,
   ): Promise<ApiResponseDto<AdminRoleDto>> {
     const role = await this.createAdminRole.execute(user.sub, dto);
-    return ApiResponseDto.success(role, 'Admin role created');
+    return ApiResponseDto.success(new AdminRoleDto(role), 'Admin role created');
   }
 }

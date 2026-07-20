@@ -1,17 +1,23 @@
 import 'dotenv/config';
 import PrismaPkg from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { hash } from 'bcrypt';
 import { readFileSync } from 'fs';
+import { wipePublicApplicationData } from './seed/wipe.js';
+import { phaseA } from './seed/phase-a-roots.js';
+import { phaseB } from './seed/phase-b-auth-catalog.js';
+import { phaseC } from './seed/phase-c-geo-factory.js';
+import { phaseD } from './seed/phase-d-pricing-customers.js';
+import { phaseE } from './seed/phase-e-ops-inventory.js';
+import { phaseF } from './seed/phase-f-sales-billing.js';
+import type { SeedCtx } from './seed/types.js';
+import { CODES, EXPECTED_FG_AVAILABLE, EXPECTED_RAW_AVAILABLE } from './seed/constants.js';
 
 const { PrismaClient } = PrismaPkg;
 
 function getEnvFromFile() {
   try {
     const envContent = readFileSync('.env', 'utf-8');
-    const lines = envContent.split('\n');
-
-    lines.forEach((line) => {
+    for (const line of envContent.split('\n')) {
       if (line.trim() && !line.trim().startsWith('#')) {
         const eqIdx = line.indexOf('=');
         if (eqIdx > 0) {
@@ -21,7 +27,7 @@ function getEnvFromFile() {
           process.env[key] = value;
         }
       }
-    });
+    }
   } catch (e) {
     console.error('Error: Could not read .env file');
     throw e;
@@ -30,206 +36,115 @@ function getEnvFromFile() {
 
 getEnvFromFile();
 
-/**
- * Deletes all rows from every application table in `public`. Table definitions
- * and `_prisma_migrations` are unchanged.
- */
-async function wipePublicApplicationData(
-  prisma: InstanceType<typeof PrismaClient>,
-): Promise<void> {
-  const rows = await prisma.$queryRaw<{ tablename: string }[]>`
-    SELECT tablename
-    FROM pg_tables
-    WHERE schemaname = 'public'
-      AND tablename <> '_prisma_migrations'
-  `;
-  const names = rows
-    .map((r) => r.tablename)
-    .filter((n) => /^[a-z0-9_]+$/.test(n));
-  if (names.length === 0) {
-    console.log('[seed] no public tables to truncate');
-    return;
+async function logModelCounts(prisma: InstanceType<typeof PrismaClient>) {
+  const models = [
+    'company',
+    'factory',
+    'user',
+    'role',
+    'permission',
+    'rolePermission',
+    'userRole',
+    'unit',
+    'brand',
+    'product',
+    'productSku',
+    'rawMaterial',
+    'supplier',
+    'supplierRawMaterial',
+    'purchaseOrder',
+    'purchaseOrderLine',
+    'billOfMaterial',
+    'billOfMaterialLine',
+    'productionDailyRecord',
+    'productionDailyWorker',
+    'productionDailyLine',
+    'productionDailyRawUsage',
+    'stockLocation',
+    'inventoryBalance',
+    'dailyStockCount',
+    'dailyStockCountLine',
+    'region',
+    'city',
+    'gate',
+    'gateCityCoverage',
+    'customer',
+    'customerTarget',
+    'customerProductPrice',
+    'volumePriceTier',
+    'cityProductPrice',
+    'salesOrder',
+    'salesOrderLine',
+    'factoryOutbound',
+    'factoryOutboundLine',
+    'outboundStatusLog',
+    'invoice',
+    'invoiceLine',
+    'invoiceInstallment',
+    'payment',
+    'paymentAllocation',
+    'collectionReminder',
+    'marketingPlan',
+    'marketingCampaign',
+    'brandAwarenessRecord',
+    'salesDailySnapshot',
+    'productionDailySnapshot',
+    'digitalAsset',
+    'physicalAsset',
+    'assetDepreciationLog',
+  ] as const;
+
+  const missing: string[] = [];
+  for (const m of models) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const count = await (prisma as any)[m].count({
+      where: m === 'productSku' ? undefined : { deletedAt: null },
+    });
+    // productSku: allow retired soft-deleted; still count all for coverage
+    const activeCount =
+      m === 'productSku'
+        ? await prisma.productSku.count()
+        : count;
+    if (activeCount < 1) missing.push(m);
+    else console.log(`[seed] ${m}: ${activeCount}`);
   }
-  const quoted = names.map((n) => `"${n}"`).join(', ');
-  await prisma.$executeRawUnsafe(
-    `TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE`,
-  );
-  console.log(
-    `[seed] truncated ${names.length} public tables (migrations preserved)`,
-  );
+  if (missing.length) {
+    throw new Error(`[seed] models with zero rows: ${missing.join(', ')}`);
+  }
 }
 
 async function main() {
   const dbUrl = process.env.DATABASE_URL;
-  const email = process.env.ROOT_ADMIN_EMAIL || 'admin@example.com';
-  const password = process.env.ROOT_ADMIN_PASSWORD || 'change-me';
-  const phone = process.env.ROOT_ADMIN_PHONE || '+959000000000';
-  const nickname = process.env.ROOT_ADMIN_NICKNAME || 'Root Admin';
+  if (!dbUrl) throw new Error('DATABASE_URL is required');
 
-  const rawClientPhone =
-    process.env.TEST_CLIENT_PHONE ||
-    process.env.DATABASE_SEED_PHONE ||
-    '+959111111111';
-  const rawClientEmail =
-    process.env.TEST_CLIENT_EMAIL ||
-    process.env.DATABASE_SEED_EMAIL ||
-    'client@example.com';
-  const clientPassword =
-    process.env.TEST_CLIENT_PASSWORD ||
-    process.env.DATABASE_SEED_PASSWORD ||
-    'client-1234';
-  const clientNickname =
-    process.env.TEST_CLIENT_NICKNAME ||
-    process.env.DATABASE_SEED_NICKNAME ||
-    'Test Client';
-
-  const normalizeEmail = (v: string) => v.trim().toLowerCase();
-  const normalizePhone = (v: string) => v.trim();
-
-  const rootEmailNorm = normalizeEmail(email);
-  const rootPhoneNorm = normalizePhone(phone);
-
-  let clientPhone = normalizePhone(rawClientPhone);
-  let clientEmail = normalizeEmail(rawClientEmail);
-
-  if (clientPhone === rootPhoneNorm) {
-    const m = clientPhone.match(/^(.*?)(\d)$/);
-    if (m) {
-      const prefix = m[1];
-      const last = Number(m[2]);
-      clientPhone = `${prefix}${(last + 1) % 10}`;
-    } else {
-      clientPhone = `${clientPhone}-client`;
-    }
-    console.warn(
-      `[warn] TEST_CLIENT_PHONE conflicted with ROOT_ADMIN_PHONE; using ${clientPhone} for seeded client`,
-    );
-  }
-
-  if (clientEmail === rootEmailNorm) {
-    const at = clientEmail.indexOf('@');
-    clientEmail =
-      at > 0
-        ? `${clientEmail.slice(0, at)}+client${clientEmail.slice(at)}`
-        : `${clientEmail}.client`;
-    console.warn(
-      `[warn] TEST_CLIENT_EMAIL conflicted with ROOT_ADMIN_EMAIL; using ${clientEmail} for seeded client`,
-    );
-  }
-
-  if (!dbUrl) {
-    throw new Error('DATABASE_URL environment variable is required');
-  }
-
-  const adapter = new PrismaPg({
-    connectionString: dbUrl,
-  });
+  const adapter = new PrismaPg({ connectionString: dbUrl });
   const prisma = new PrismaClient({ adapter });
 
-  console.warn(
-    '[seed] removing all rows from public tables (schema unchanged), then seeding…',
-  );
-  await wipePublicApplicationData(prisma);
+  try {
+    await wipePublicApplicationData(prisma);
 
-  const rootPermissions = [
-    { permission: 'MANAGE_USERS' as const },
-    { permission: 'VIEW_ANALYTICS' as const },
-  ];
+    const a = await phaseA(prisma);
+    const ctx = { prisma, ...a } as SeedCtx;
+    Object.assign(ctx, await phaseB(prisma, ctx));
+    Object.assign(ctx, await phaseC(prisma, ctx));
+    Object.assign(ctx, await phaseD(prisma, ctx));
+    Object.assign(ctx, await phaseE(prisma, ctx));
+    await phaseF(prisma, ctx);
 
-  const rootRole = await prisma.adminRole.upsert({
-    where: { name: 'ROOT_ADMIN' },
-    create: {
-      name: 'ROOT_ADMIN',
-      description: 'System root admin (seeded, immutable)',
-      isSystem: true,
-      permissions: {
-        createMany: { data: rootPermissions },
-      },
-    },
-    update: {
-      isSystem: true,
-      permissions: {
-        deleteMany: {},
-        createMany: { data: rootPermissions },
-      },
-    },
-  });
+    await logModelCounts(prisma);
 
-  const passwordHash = await hash(password, 12);
-
-  await prisma.user.upsert({
-    where: { email },
-    create: {
-      phone,
-      email,
-      password: passwordHash,
-      nickname,
-      isEmailVerified: true,
-      isPhoneVerified: true,
-      emailVerifiedAt: new Date(),
-      phoneVerifiedAt: new Date(),
-      isActive: true,
-      isBanned: false,
-      adminRoleId: rootRole.id,
-    },
-    update: {
-      phone,
-      password: passwordHash,
-      nickname,
-      isEmailVerified: true,
-      isPhoneVerified: true,
-      emailVerifiedAt: new Date(),
-      phoneVerifiedAt: new Date(),
-      isActive: true,
-      isBanned: false,
-      adminRoleId: rootRole.id,
-    },
-  });
-
-  console.log('[ok] Root admin user seeded successfully');
-
-  const clientPasswordHash = await hash(clientPassword, 12);
-  await prisma.user.upsert({
-    where: { phone: clientPhone },
-    create: {
-      phone: clientPhone,
-      email: clientEmail,
-      password: clientPasswordHash,
-      nickname: clientNickname,
-      isEmailVerified: true,
-      isPhoneVerified: true,
-      emailVerifiedAt: new Date(),
-      phoneVerifiedAt: new Date(),
-      isActive: true,
-      isBanned: false,
-      adminRoleId: null,
-    },
-    update: {
-      email: clientEmail,
-      password: clientPasswordHash,
-      nickname: clientNickname,
-      isEmailVerified: true,
-      isPhoneVerified: true,
-      emailVerifiedAt: new Date(),
-      phoneVerifiedAt: new Date(),
-      isActive: true,
-      isBanned: false,
-      adminRoleId: null,
-    },
-  });
-
-  console.log('[ok] Test client user seeded successfully');
-  console.log(`  phone: ${clientPhone}`);
-  console.log(`  email: ${clientEmail}`);
-  console.log(`  password: ${clientPassword}`);
-  await prisma.$disconnect();
+    console.log(
+      `[seed] done. FG available=${EXPECTED_FG_AVAILABLE} raw=${EXPECTED_RAW_AVAILABLE}`,
+    );
+    console.log(
+      `[seed] lookup codes: ${CODES.soSaleOk}, ${CODES.sku}, ${CODES.warehouse}`,
+    );
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
-main()
-  .then(async () => {
-    process.exit(0);
-  })
-  .catch(async (e) => {
-    console.error(e);
-    process.exit(1);
-  });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

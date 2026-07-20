@@ -3,8 +3,10 @@ import { AdminRolesController } from './admin-roles.controller.js';
 import { CreateAdminRoleUseCase } from '../../../application/use-cases/admin-roles/create-admin-role.use-case.js';
 import { ListAdminRolesUseCase } from '../../../application/use-cases/admin-roles/list-admin-roles.use-case.js';
 import { ListAdminPermissionsUseCase } from '../../../application/use-cases/admin-roles/list-admin-permissions.use-case.js';
-import { ADMIN_ROLE_REPOSITORY } from '../../../domain/repositories/admin-role.repository.interface.js';
-import { AdminRoleRepository } from '../../../infrastructure/repositories/admin-role.repository.js';
+import { ROLE_REPOSITORY } from '../../../domain/repositories/role.repository.interface.js';
+import { RoleRepository } from '../../../infrastructure/repositories/role.repository.js';
+import { USER_REPOSITORY } from '../../../domain/repositories/user.repository.interface.js';
+import { UserRepository } from '../../../infrastructure/repositories/user.repository.js';
 
 @Module({
   controllers: [AdminRolesController],
@@ -12,10 +14,8 @@ import { AdminRoleRepository } from '../../../infrastructure/repositories/admin-
     CreateAdminRoleUseCase,
     ListAdminRolesUseCase,
     ListAdminPermissionsUseCase,
-    {
-      provide: ADMIN_ROLE_REPOSITORY,
-      useClass: AdminRoleRepository,
-    },
+    { provide: ROLE_REPOSITORY, useClass: RoleRepository },
+    { provide: USER_REPOSITORY, useClass: UserRepository },
   ],
 })
 export class AdminRolesModule {}

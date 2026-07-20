@@ -1,361 +1,168 @@
 import { Injectable } from '@nestjs/common';
-import PrismaPkg from '@prisma/client';
-import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service.js';
 import { UserMapper } from '../mappers/user.mapper.js';
 import { UserEntity } from '../../domain/entities/user.entity.js';
 import type {
-  CreateUserData,
-  EmailVerificationData,
+  CreateStaffUserData,
   IUserRepository,
-  OtpVerificationData,
-  UpdateUserData,
-  UserAdminRoleData,
+  UpdateStaffUserData,
   UserAuthData,
 } from '../../domain/repositories/user.repository.interface.js';
-import { OtpPurpose } from '../../domain/enums/otp-purpose.enum.js';
-import { VerificationStatus } from '../../domain/enums/verification-status.enum.js';
-import { AdminPermission } from '../../domain/enums/admin-permission.enum.js';
+import { UserStatus } from '../../domain/enums/user-status.enum.js';
 import { normalizeEmail } from '../../common/utils/normalize-email.js';
-
-const {
-  OtpPurpose: PrismaOtpPurpose,
-  VerificationStatus: PrismaVerificationStatus,
-} = PrismaPkg;
-
-type UserWithAuthIncludes = Prisma.UserGetPayload<{
-  include: {
-    adminRole: { include: { permissions: true } };
-  };
-}>;
 
 @Injectable()
 export class UserRepository implements IUserRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: CreateUserData): Promise<UserEntity> {
+  async create(data: CreateStaffUserData): Promise<UserEntity> {
     const user = await this.prisma.user.create({
       data: {
-        phone: data.phone,
         email: normalizeEmail(data.email),
-        password: data.password,
-        nickname: data.nickname,
+        passwordHash: data.passwordHash,
+        nameEn: data.nameEn,
+        nameMm: data.nameMm ?? null,
+        phone: data.phone ?? null,
+        companyId: data.companyId ?? null,
+        isRoot: data.isRoot ?? false,
+        status: data.status ?? UserStatus.ACTIVE,
       },
     });
-
     return UserMapper.toDomain(user);
   }
 
   async findById(id: string): Promise<UserEntity | null> {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findFirst({
+      where: { id, deletedAt: null },
+    });
     return user ? UserMapper.toDomain(user) : null;
   }
 
   async findByEmail(email: string): Promise<UserEntity | null> {
-    const user = await this.prisma.user.findUnique({
-      where: { email: normalizeEmail(email) },
+    const user = await this.prisma.user.findFirst({
+      where: { email: normalizeEmail(email), deletedAt: null },
     });
     return user ? UserMapper.toDomain(user) : null;
   }
 
-  async findByPhone(phone: string): Promise<UserEntity | null> {
-    const user = await this.prisma.user.findUnique({ where: { phone } });
-    return user ? UserMapper.toDomain(user) : null;
-  }
-
-  async findAll(): Promise<UserEntity[]> {
+  async listStaff(): Promise<UserEntity[]> {
     const users = await this.prisma.user.findMany({
-      where: { isActive: true },
-    });
-    return users.map((u) => UserMapper.toDomain(u));
-  }
-
-  async update(id: string, data: UpdateUserData): Promise<UserEntity> {
-    const payload: UpdateUserData = { ...data };
-    if (typeof payload.email === 'string') {
-      payload.email = normalizeEmail(payload.email);
-    }
-
-    const user = await this.prisma.user.update({ where: { id }, data: payload });
-    return UserMapper.toDomain(user);
-  }
-
-  async setUserBanned(
-    userId: string,
-    banned: boolean,
-    banReason?: string | null,
-  ): Promise<UserEntity> {
-    const current = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { authTokenVersion: true },
-    });
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: banned
-        ? {
-            isBanned: true,
-            banReason: banReason ?? null,
-            bannedAt: new Date(),
-            authTokenVersion: (current?.authTokenVersion ?? 0) + 1,
-          }
-        : {
-            isBanned: false,
-            banReason: null,
-            bannedAt: null,
-            authTokenVersion: (current?.authTokenVersion ?? 0) + 1,
-          },
-    });
-    return UserMapper.toDomain(user);
-  }
-
-  async delete(id: string): Promise<boolean> {
-    await this.prisma.user.update({
-      where: { id },
-      data: { isActive: false },
-    });
-    return true;
-  }
-
-  async getProfileAvatarUrl(userId: string): Promise<string | null> {
-    const row = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { avatar: true },
-    });
-    return row?.avatar ?? null;
-  }
-
-  async setProfileAvatar(
-    userId: string,
-    avatarUrl: string | null,
-  ): Promise<void> {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { avatar: avatarUrl },
-    });
-  }
-
-  async createPhoneOtp(
-    phone: string,
-    code: string,
-    expiresAt: Date,
-    purpose: OtpPurpose = OtpPurpose.PHONE_VERIFICATION,
-  ): Promise<void> {
-    const prismaPurpose =
-      purpose === OtpPurpose.PASSWORD_RESET
-        ? PrismaOtpPurpose.PASSWORD_RESET
-        : PrismaOtpPurpose.PHONE_VERIFICATION;
-
-    await this.prisma.otpVerification.updateMany({
-      where: {
-        phone,
-        purpose: prismaPurpose,
-        status: PrismaVerificationStatus.PENDING,
-      },
-      data: { status: PrismaVerificationStatus.EXPIRED },
-    });
-
-    await this.prisma.otpVerification.create({
-      data: {
-        phone,
-        code,
-        purpose: prismaPurpose,
-        status: PrismaVerificationStatus.PENDING,
-        expiresAt,
-      },
-    });
-  }
-
-  async findLatestActivePhoneOtp(
-    phone: string,
-    purpose: OtpPurpose = OtpPurpose.PHONE_VERIFICATION,
-  ): Promise<OtpVerificationData | null> {
-    const prismaPurpose =
-      purpose === OtpPurpose.PASSWORD_RESET
-        ? PrismaOtpPurpose.PASSWORD_RESET
-        : PrismaOtpPurpose.PHONE_VERIFICATION;
-
-    const row = await this.prisma.otpVerification.findFirst({
-      where: {
-        phone,
-        purpose: prismaPurpose,
-        status: PrismaVerificationStatus.PENDING,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      phone: row.phone,
-      code: row.code,
-      purpose:
-        row.purpose === PrismaOtpPurpose.PASSWORD_RESET
-          ? OtpPurpose.PASSWORD_RESET
-          : OtpPurpose.PHONE_VERIFICATION,
-      status: row.status as VerificationStatus,
-      expiresAt: row.expiresAt,
-      attempts: row.attempts,
-      maxAttempts: row.maxAttempts,
-    };
-  }
-
-  async incrementPhoneOtpAttempt(id: string): Promise<void> {
-    await this.prisma.otpVerification.update({
-      where: { id },
-      data: { attempts: { increment: 1 } },
-    });
-  }
-
-  async markPhoneOtpFailed(id: string): Promise<void> {
-    await this.prisma.otpVerification.update({
-      where: { id },
-      data: { status: PrismaVerificationStatus.FAILED },
-    });
-  }
-
-  async markPhoneOtpVerified(id: string): Promise<void> {
-    await this.prisma.otpVerification.update({
-      where: { id },
-      data: {
-        status: PrismaVerificationStatus.VERIFIED,
-        verifiedAt: new Date(),
-      },
-    });
-  }
-
-  async markUserPhoneVerified(phone: string): Promise<void> {
-    await this.prisma.user.update({
-      where: { phone },
-      data: {
-        isPhoneVerified: true,
-        phoneVerifiedAt: new Date(),
-      },
-    });
-  }
-
-  async createEmailVerification(
-    email: string,
-    token: string,
-    expiresAt: Date,
-  ): Promise<void> {
-    const normalized = normalizeEmail(email);
-    await this.prisma.emailVerification.updateMany({
-      where: {
-        email: normalized,
-        status: PrismaVerificationStatus.PENDING,
-      },
-      data: { status: PrismaVerificationStatus.EXPIRED },
-    });
-
-    await this.prisma.emailVerification.create({
-      data: {
-        email: normalized,
-        token,
-        status: PrismaVerificationStatus.PENDING,
-        expiresAt,
-      },
-    });
-  }
-
-  async findActiveEmailVerification(
-    email: string,
-    token: string,
-  ): Promise<EmailVerificationData | null> {
-    const row = await this.prisma.emailVerification.findFirst({
-      where: {
-        email: normalizeEmail(email),
-        token,
-        status: PrismaVerificationStatus.PENDING,
-      },
-    });
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      email: row.email,
-      token: row.token,
-      status: row.status as VerificationStatus,
-      expiresAt: row.expiresAt,
-    };
-  }
-
-  async markEmailVerificationExpired(id: string): Promise<void> {
-    await this.prisma.emailVerification.update({
-      where: { id },
-      data: { status: PrismaVerificationStatus.EXPIRED },
-    });
-  }
-
-  async markEmailVerificationVerified(id: string): Promise<void> {
-    await this.prisma.emailVerification.update({
-      where: { id },
-      data: {
-        status: PrismaVerificationStatus.VERIFIED,
-        verifiedAt: new Date(),
-      },
-    });
-  }
-
-  async markUserEmailVerified(email: string): Promise<void> {
-    await this.prisma.user.update({
-      where: { email: normalizeEmail(email) },
-      data: {
-        isEmailVerified: true,
-        emailVerifiedAt: new Date(),
-      },
-    });
-  }
-
-  async findAdminUserIds(): Promise<string[]> {
-    const rows = await this.prisma.user.findMany({
-      where: { adminRoleId: { not: null }, isActive: true },
-      select: { id: true },
-    });
-    return rows.map((r) => r.id);
-  }
-
-  async listAdminUsers(): Promise<UserEntity[]> {
-    const users = await this.prisma.user.findMany({
-      where: { adminRoleId: { not: null } },
+      where: { deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
     return users.map((u) => UserMapper.toDomain(u));
   }
 
+  async update(id: string, data: UpdateStaffUserData): Promise<UserEntity> {
+    const payload: UpdateStaffUserData = { ...data };
+    if (typeof payload.email === 'string') {
+      payload.email = normalizeEmail(payload.email);
+    }
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: payload,
+    });
+    return UserMapper.toDomain(user);
+  }
+
+  async softDelete(id: string): Promise<UserEntity> {
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { deletedAt: new Date(), status: UserStatus.INACTIVE },
+    });
+    return UserMapper.toDomain(user);
+  }
+
   async getAuthDataByUserId(userId: string): Promise<UserAuthData | null> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
       include: {
-        adminRole: { include: { permissions: true } },
+        userRoles: {
+          where: { deletedAt: null },
+          include: {
+            role: {
+              include: {
+                rolePermissions: {
+                  where: { deletedAt: null },
+                  include: { permission: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
-
     if (!user) return null;
-    return this.toAuthData(user);
-  }
 
-  async getAdminRoleByUserId(
-    userId: string,
-  ): Promise<UserAdminRoleData | null> {
-    const auth = await this.getAuthDataByUserId(userId);
-    return auth?.adminRole ?? null;
-  }
+    const roles = user.userRoles
+      .filter((ur) => ur.role.deletedAt === null)
+      .map((ur) => {
+        const permissionCodes = ur.role.rolePermissions
+          .filter((rp) => rp.permission.deletedAt === null)
+          .map((rp) => rp.permission.code);
+        return {
+          id: ur.role.id,
+          code: ur.role.code,
+          nameEn: ur.role.nameEn,
+          isSystem: ur.role.isSystem,
+          permissions: permissionCodes,
+        };
+      });
 
-  private toAuthData(user: UserWithAuthIncludes): UserAuthData {
+    const permissionCodes = [...new Set(roles.flatMap((r) => r.permissions))];
+
     return {
       user: UserMapper.toDomain(user),
-      adminRole: user.adminRole
-        ? {
-            id: user.adminRole.id,
-            name: user.adminRole.name,
-            isSystem: user.adminRole.isSystem,
-            permissions: user.adminRole.permissions.map(
-              (p) => p.permission as AdminPermission,
-            ),
-          }
-        : null,
+      roles,
+      permissionCodes,
     };
+  }
+
+  async setUserRoles(userId: string, roleIds: string[]): Promise<void> {
+    const existing = await this.prisma.userRole.findMany({
+      where: { userId, deletedAt: null },
+    });
+    const existingIds = new Set(existing.map((e) => e.roleId));
+    const desired = new Set(roleIds);
+
+    for (const row of existing) {
+      if (!desired.has(row.roleId)) {
+        await this.prisma.userRole.update({
+          where: { id: row.id },
+          data: { deletedAt: new Date() },
+        });
+      }
+    }
+
+    for (const roleId of roleIds) {
+      if (existingIds.has(roleId)) continue;
+      const softDeleted = await this.prisma.userRole.findFirst({
+        where: { userId, roleId },
+      });
+      if (softDeleted) {
+        await this.prisma.userRole.update({
+          where: { id: softDeleted.id },
+          data: { deletedAt: null },
+        });
+      } else {
+        await this.prisma.userRole.create({ data: { userId, roleId } });
+      }
+    }
+  }
+
+  async addUserRole(userId: string, roleId: string): Promise<void> {
+    const auth = await this.getAuthDataByUserId(userId);
+    const current = auth?.roles.map((r) => r.id) ?? [];
+    if (!current.includes(roleId)) {
+      await this.setUserRoles(userId, [...current, roleId]);
+    }
+  }
+
+  async removeUserRole(userId: string, roleId: string): Promise<void> {
+    const auth = await this.getAuthDataByUserId(userId);
+    const next = (auth?.roles.map((r) => r.id) ?? []).filter(
+      (id) => id !== roleId,
+    );
+    await this.setUserRoles(userId, next);
   }
 }
