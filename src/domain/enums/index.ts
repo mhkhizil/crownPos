@@ -20,3 +20,5 @@ export * from './target-priority.enum.js';
 export * from './potential-volume-band.enum.js';
 export * from './sales-analysis-period.enum.js';
 export * from './purchase-status.enum.js';
+export * from './zakat-nisab-style.enum.js';
+export * from './zakat-period-type.enum.js';

@@ -72,6 +72,7 @@ const MODEL_DELEGATES = [
   'digitalAsset',
   'physicalAsset',
   'assetDepreciationLog',
+  'zakatPayment',
 ] as const;
 
 describe('Data integrity (full seed)', () => {

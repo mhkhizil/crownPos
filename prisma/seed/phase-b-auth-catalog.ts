@@ -118,6 +118,8 @@ export async function phaseB(
       assetType: 'VEHICLE',
       condition: 'GOOD',
       isActive: true,
+      purchasePriceMmk: 50_000_000,
+      bookValueMmk: 40_000_000,
     },
   });
 

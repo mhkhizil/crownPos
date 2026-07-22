@@ -139,6 +139,17 @@ enum CollectionReminderStatus {
   CANCELLED
 }
 
+enum ZakatNisabStyle {
+  GOLD
+  SILVER
+}
+
+enum ZakatPeriodType {
+  MONTH
+  YEAR
+  CUSTOM
+}
+
 enum InventoryItemType {
   RAW_MATERIAL
   FINISHED_GOOD
@@ -222,6 +233,7 @@ model Company {
   digitalAssets  DigitalAsset[]
   physicalAssets PhysicalAsset[]
   marketingPlans MarketingPlan[]
+  zakatPayments  ZakatPayment[]
 
   @@index([deletedAt])
 }
@@ -278,6 +290,7 @@ model User {
   salespersonTargets CustomerTarget[] @relation("SalespersonTargets")
   assignedReminders  CollectionReminder[] @relation("ReminderAssignee")
   createdReminders   CollectionReminder[] @relation("ReminderCreator")
+  zakatPaymentsCreated ZakatPayment[] @relation("ZakatPaymentCreator")
   salesOrdersTaken   SalesOrder[]         @relation("SalesOrderTakenBy")
   productionDaysWorked ProductionDailyWorker[]
   outboundsAsDriver  FactoryOutbound[]    @relation("OutboundDriver")
@@ -1573,5 +1586,34 @@ model AssetDepreciationLog {
   physicalAsset    PhysicalAsset @relation(fields: [physicalAssetId], references: [id])
 
   @@index([physicalAssetId, periodDate])
+  @@index([deletedAt])
+}
+
+/// Ops ledger: zakat paid for a Gregorian MONTH / YEAR / CUSTOM window (Hanafi helper).
+model ZakatPayment {
+  id                 String           @id @default(cuid())
+  companyId          String?
+  periodType         ZakatPeriodType
+  periodStart        DateTime         @db.Date
+  periodEnd          DateTime         @db.Date
+  year               Int?
+  month              Int?
+  amountPaidMmk      Decimal          @db.Decimal(18, 2)
+  paidAt             DateTime         @db.Date
+  nisabStyle         ZakatNisabStyle?
+  calculatedDueMmk   Decimal?         @db.Decimal(18, 2)
+  notes              String?
+  createdByUserId    String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  deletedAt          DateTime?
+
+  company            Company?         @relation(fields: [companyId], references: [id])
+  createdBy          User?            @relation("ZakatPaymentCreator", fields: [createdByUserId], references: [id])
+
+  @@index([periodStart, periodEnd])
+  @@index([year, month])
+  @@index([paidAt])
+  @@index([companyId])
   @@index([deletedAt])
 }

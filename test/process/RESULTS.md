@@ -135,3 +135,17 @@ Hardening with edge suite: single active invoice per order; reject over-allocati
 | `POST .../billing/collection-reminders/dispatch-due` | Manual/ops trigger |
 
 Env: `PUSHER_*`, optional `COLLECTION_REMINDER_DISPATCH_ENABLED=false` to pause cron.
+
+---
+
+## Hanafi zakat calculator + tracker (2026-07-23)
+
+| Artifact | Role |
+|---|---|
+| `docs/zakat-hanafi.md` | Fiqh buckets, APIs, M1–M5 worksheet, completeness codes |
+| `POST .../bd-analytics/zakat/hanafi/calculate` | Gold/silver nisab estimate |
+| `.../zakat/payments` | MONTH / YEAR / CUSTOM payment tracker |
+| Domain calculator + period resolver | Pure math (unit Z/P) |
+| `npm run test:zakat` | Unit zakat + process tracker + M1–M5 manual verify |
+
+**Run stamp:** 2026-07-23 — unit zakat **18/18**; process zakat-hanafi **9/9** (tracker + M1–M5). Re-seed after manual-verify.

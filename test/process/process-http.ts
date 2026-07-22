@@ -103,3 +103,14 @@ export async function apiPatch<T>(
     .send(payload);
   return { status: res.status, body: res.body };
 }
+
+export async function apiDelete<T = unknown>(
+  server: Server,
+  token: string,
+  path: string,
+): Promise<{ status: number; body: { success: boolean; data?: T; message?: string } }> {
+  const res = await request(server)
+    .delete(path)
+    .set(authHeaders(token));
+  return { status: res.status, body: res.body };
+}

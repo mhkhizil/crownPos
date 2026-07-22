@@ -357,5 +357,22 @@ export async function phaseF(prisma: SeedPrisma, ctx: SeedCtx): Promise<void> {
     },
   });
 
+  await prisma.zakatPayment.create({
+    data: {
+      companyId: ctx.companyId,
+      periodType: 'YEAR',
+      periodStart: dateOnly('2025-01-01'),
+      periodEnd: dateOnly('2025-12-31'),
+      year: 2025,
+      month: null,
+      amountPaidMmk: 100_000,
+      paidAt: dateOnly('2025-12-15'),
+      nisabStyle: 'SILVER',
+      calculatedDueMmk: 100_000,
+      notes: 'Seed sample zakat payment (prior year)',
+      createdByUserId: ctx.rootUserId,
+    },
+  });
+
   console.log('[seed] phase F: sales + billing');
 }

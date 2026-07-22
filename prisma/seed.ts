@@ -92,6 +92,7 @@ async function logModelCounts(prisma: InstanceType<typeof PrismaClient>) {
     'digitalAsset',
     'physicalAsset',
     'assetDepreciationLog',
+    'zakatPayment',
   ] as const;
 
   const missing: string[] = [];

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -29,6 +30,11 @@ import { RecordBrandAwarenessUseCase } from '../../../application/use-cases/bd-a
 import { GetAnalyticsSummaryUseCase } from '../../../application/use-cases/bd-analytics/get-analytics-summary.use-case.js';
 import { GetSalesAnalysisUseCase } from '../../../application/use-cases/bd-analytics/get-sales-analysis.use-case.js';
 import { RefreshDailySnapshotsUseCase } from '../../../application/use-cases/bd-analytics/refresh-daily-snapshots.use-case.js';
+import { CalculateHanafiZakatUseCase } from '../../../application/use-cases/zakat/calculate-hanafi-zakat.use-case.js';
+import { RecordZakatPaymentUseCase } from '../../../application/use-cases/zakat/record-zakat-payment.use-case.js';
+import { ListZakatPaymentsUseCase } from '../../../application/use-cases/zakat/list-zakat-payments.use-case.js';
+import { GetZakatPaymentCoverageUseCase } from '../../../application/use-cases/zakat/get-zakat-payment-coverage.use-case.js';
+import { DeleteZakatPaymentUseCase } from '../../../application/use-cases/zakat/delete-zakat-payment.use-case.js';
 import { ROUTE_PREFIX } from '../../routing.paths.js';
 import {
   AnalyticsSummaryResponseDto,
@@ -48,6 +54,15 @@ import {
   SalesAnalysisResponseDto,
   UpsertCustomerTargetDto,
 } from '../../../application/dtos/bd-analytics/index.js';
+import {
+  CalculateHanafiZakatDto,
+  HanafiZakatCalculateResponseDto,
+  ListZakatPaymentsQueryDto,
+  RecordZakatPaymentDto,
+  ZakatCoverageQueryDto,
+  ZakatCoverageResponseDto,
+  ZakatPaymentResponseDto,
+} from '../../../application/dtos/zakat/index.js';
 
 @ApiTags('BD / Analytics')
 @Controller(`${ROUTE_PREFIX.adminDashboard}/bd-analytics`)
@@ -66,6 +81,11 @@ export class BdAnalyticsController {
     private readonly getAnalyticsSummary: GetAnalyticsSummaryUseCase,
     private readonly getSalesAnalysis: GetSalesAnalysisUseCase,
     private readonly refreshSnapshots: RefreshDailySnapshotsUseCase,
+    private readonly calculateHanafiZakat: CalculateHanafiZakatUseCase,
+    private readonly recordZakatPayment: RecordZakatPaymentUseCase,
+    private readonly listZakatPayments: ListZakatPaymentsUseCase,
+    private readonly getZakatCoverage: GetZakatPaymentCoverageUseCase,
+    private readonly deleteZakatPayment: DeleteZakatPaymentUseCase,
   ) {}
 
   @Post('targets')
@@ -236,6 +256,92 @@ export class BdAnalyticsController {
   ): Promise<ApiResponseDto<DailySnapshotResponseDto>> {
     return ApiResponseDto.success(
       await this.refreshSnapshots.execute(u.sub, date),
+    );
+  }
+
+  @Post('zakat/hanafi/calculate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Hanafi business zakat estimate (gold/silver nisab)',
+  })
+  @ApiSuccessResponse(HanafiZakatCalculateResponseDto, {
+    status: HttpStatus.OK,
+    description: 'Zakat estimate computed',
+  })
+  async zakatCalculate(
+    @CurrentUser() u: JwtPayload,
+    @Body() body: CalculateHanafiZakatDto,
+  ): Promise<ApiResponseDto<HanafiZakatCalculateResponseDto>> {
+    return ApiResponseDto.success(
+      await this.calculateHanafiZakat.execute(u.sub, body),
+    );
+  }
+
+  @Post('zakat/payments')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Record zakat payment for MONTH / YEAR / CUSTOM range',
+  })
+  @ApiSuccessResponse(ZakatPaymentResponseDto, {
+    status: HttpStatus.CREATED,
+    description: 'Zakat payment recorded',
+  })
+  async zakatPaymentCreate(
+    @CurrentUser() u: JwtPayload,
+    @Body() body: RecordZakatPaymentDto,
+  ): Promise<ApiResponseDto<ZakatPaymentResponseDto>> {
+    return ApiResponseDto.success(
+      await this.recordZakatPayment.execute(u.sub, body),
+      'Zakat payment recorded',
+    );
+  }
+
+  @Get('zakat/payments')
+  @ApiOperation({ summary: 'List zakat payments (overlap or year/month)' })
+  @ApiArraySuccessResponse(ZakatPaymentResponseDto, {
+    status: HttpStatus.OK,
+    description: 'Zakat payments retrieved',
+  })
+  async zakatPaymentList(
+    @CurrentUser() u: JwtPayload,
+    @Query() query: ListZakatPaymentsQueryDto,
+  ): Promise<ApiResponseDto<ZakatPaymentResponseDto[]>> {
+    return ApiResponseDto.success(
+      await this.listZakatPayments.execute(u.sub, query),
+    );
+  }
+
+  @Get('zakat/payments/coverage')
+  @ApiOperation({
+    summary: 'Coverage total for a MONTH / YEAR / CUSTOM period',
+  })
+  @ApiSuccessResponse(ZakatCoverageResponseDto, {
+    status: HttpStatus.OK,
+    description: 'Zakat coverage retrieved',
+  })
+  async zakatPaymentCoverage(
+    @CurrentUser() u: JwtPayload,
+    @Query() query: ZakatCoverageQueryDto,
+  ): Promise<ApiResponseDto<ZakatCoverageResponseDto>> {
+    return ApiResponseDto.success(
+      await this.getZakatCoverage.execute(u.sub, query),
+    );
+  }
+
+  @Delete('zakat/payments/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Soft-delete a zakat payment' })
+  @ApiSuccessResponse(ZakatPaymentResponseDto, {
+    status: HttpStatus.OK,
+    description: 'Zakat payment deleted',
+  })
+  async zakatPaymentDelete(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<ZakatPaymentResponseDto>> {
+    return ApiResponseDto.success(
+      await this.deleteZakatPayment.execute(u.sub, id),
+      'Zakat payment deleted',
     );
   }
 }

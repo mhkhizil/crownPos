@@ -23,6 +23,7 @@
     "test:process": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --testPathPatterns=sales-manufacture.process",
     "test:integrity": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --testPathPatterns=data-integrity",
     "test:edge": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --testPathPatterns=edge-cases",
+    "test:zakat": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --testPathPatterns=zakat --no-coverage && node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --testPathPatterns=zakat-hanafi --no-coverage",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",

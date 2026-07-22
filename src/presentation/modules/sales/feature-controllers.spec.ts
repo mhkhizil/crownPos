@@ -97,6 +97,11 @@ import { RecordBrandAwarenessUseCase } from '../../../application/use-cases/bd-a
 import { GetAnalyticsSummaryUseCase } from '../../../application/use-cases/bd-analytics/get-analytics-summary.use-case.js';
 import { GetSalesAnalysisUseCase } from '../../../application/use-cases/bd-analytics/get-sales-analysis.use-case.js';
 import { RefreshDailySnapshotsUseCase } from '../../../application/use-cases/bd-analytics/refresh-daily-snapshots.use-case.js';
+import { CalculateHanafiZakatUseCase } from '../../../application/use-cases/zakat/calculate-hanafi-zakat.use-case.js';
+import { RecordZakatPaymentUseCase } from '../../../application/use-cases/zakat/record-zakat-payment.use-case.js';
+import { ListZakatPaymentsUseCase } from '../../../application/use-cases/zakat/list-zakat-payments.use-case.js';
+import { GetZakatPaymentCoverageUseCase } from '../../../application/use-cases/zakat/get-zakat-payment-coverage.use-case.js';
+import { DeleteZakatPaymentUseCase } from '../../../application/use-cases/zakat/delete-zakat-payment.use-case.js';
 
 type AuthedCtx = {
   switchToHttp: () => {
@@ -261,6 +266,11 @@ describe('Split feature controllers', () => {
       GetAnalyticsSummaryUseCase,
       GetSalesAnalysisUseCase,
       RefreshDailySnapshotsUseCase,
+      CalculateHanafiZakatUseCase,
+      RecordZakatPaymentUseCase,
+      ListZakatPaymentsUseCase,
+      GetZakatPaymentCoverageUseCase,
+      DeleteZakatPaymentUseCase,
     ] as const;
 
     const { app, close } = await createHttpTestApp({

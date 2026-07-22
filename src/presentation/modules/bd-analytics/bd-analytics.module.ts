@@ -11,8 +11,15 @@ import { RecordBrandAwarenessUseCase } from '../../../application/use-cases/bd-a
 import { GetAnalyticsSummaryUseCase } from '../../../application/use-cases/bd-analytics/get-analytics-summary.use-case.js';
 import { GetSalesAnalysisUseCase } from '../../../application/use-cases/bd-analytics/get-sales-analysis.use-case.js';
 import { RefreshDailySnapshotsUseCase } from '../../../application/use-cases/bd-analytics/refresh-daily-snapshots.use-case.js';
+import { CalculateHanafiZakatUseCase } from '../../../application/use-cases/zakat/calculate-hanafi-zakat.use-case.js';
+import { RecordZakatPaymentUseCase } from '../../../application/use-cases/zakat/record-zakat-payment.use-case.js';
+import { ListZakatPaymentsUseCase } from '../../../application/use-cases/zakat/list-zakat-payments.use-case.js';
+import { GetZakatPaymentCoverageUseCase } from '../../../application/use-cases/zakat/get-zakat-payment-coverage.use-case.js';
+import { DeleteZakatPaymentUseCase } from '../../../application/use-cases/zakat/delete-zakat-payment.use-case.js';
 import { BD_ANALYTICS_REPOSITORY } from '../../../domain/repositories/bd-analytics.repository.interface.js';
 import { BdAnalyticsRepository } from '../../../infrastructure/repositories/bd-analytics.repository.js';
+import { ZAKAT_REPOSITORY } from '../../../domain/repositories/zakat.repository.interface.js';
+import { ZakatRepository } from '../../../infrastructure/repositories/zakat.repository.js';
 import { USER_REPOSITORY } from '../../../domain/repositories/user.repository.interface.js';
 import { UserRepository } from '../../../infrastructure/repositories/user.repository.js';
 
@@ -30,7 +37,13 @@ import { UserRepository } from '../../../infrastructure/repositories/user.reposi
     GetAnalyticsSummaryUseCase,
     GetSalesAnalysisUseCase,
     RefreshDailySnapshotsUseCase,
+    CalculateHanafiZakatUseCase,
+    RecordZakatPaymentUseCase,
+    ListZakatPaymentsUseCase,
+    GetZakatPaymentCoverageUseCase,
+    DeleteZakatPaymentUseCase,
     { provide: BD_ANALYTICS_REPOSITORY, useClass: BdAnalyticsRepository },
+    { provide: ZAKAT_REPOSITORY, useClass: ZakatRepository },
     { provide: USER_REPOSITORY, useClass: UserRepository },
   ],
 })
