@@ -45,6 +45,7 @@ function purchaseEntity(
     new Date('2026-07-19'),
     status,
     50_000,
+    0,
     null,
     [
       new PurchaseOrderLineEntity(
@@ -86,6 +87,9 @@ function purchasesMock(): jest.Mocked<IPurchaseRepository> {
     getPurchaseOrder: jest.fn(),
     receivePurchaseOrder: jest.fn(),
     cancelPurchaseOrder: jest.fn(),
+    recordPurchasePayment: jest.fn(),
+    getSupplierPayables: jest.fn(),
+    sumOpenSupplierPayablesMmk: jest.fn(),
   };
 }
 

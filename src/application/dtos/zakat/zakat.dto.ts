@@ -47,7 +47,11 @@ export class CalculateHanafiZakatDto {
   @Min(0)
   bankBalanceMmk?: number;
 
-  @ApiPropertyOptional({ default: 0 })
+  @ApiPropertyOptional({
+    default: 0,
+    description:
+      'Optional extra liabilities (loans etc.). Supplier PO unpaid balances are auto-added.',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -231,7 +235,12 @@ export class HanafiZakatCalculateResponseDto {
   @ApiProperty() receivablesMmk!: number;
   @ApiProperty() finishedGoodsValueMmk!: number;
   @ApiProperty() rawMaterialsValueMmk!: number;
-  @ApiProperty() payablesMmk!: number;
+  @ApiProperty({ description: 'Auto supplier AP (PO balances)' })
+  supplierPayablesMmk!: number;
+  @ApiProperty({ description: 'Manual other liabilities (loans etc.)' })
+  otherPayablesMmk!: number;
+  @ApiProperty({ description: 'supplierPayables + otherPayables' })
+  payablesMmk!: number;
   @ApiProperty() excludedPhysicalAssetsMmk!: number;
   @ApiProperty() netZakatableMmk!: number;
   @ApiProperty() meetsNisab!: boolean;
@@ -248,6 +257,8 @@ export class HanafiZakatCalculateResponseDto {
     calc: HanafiZakatCalculationResult,
     extras: {
       excludedPhysicalAssetsMmk: number;
+      supplierPayablesMmk: number;
+      otherPayablesMmk: number;
       warnings: string[];
       overlappingPayments: ZakatPaymentEntity[];
     },
@@ -262,6 +273,8 @@ export class HanafiZakatCalculateResponseDto {
     dto.receivablesMmk = calc.receivablesMmk;
     dto.finishedGoodsValueMmk = calc.finishedGoodsValueMmk;
     dto.rawMaterialsValueMmk = calc.rawMaterialsValueMmk;
+    dto.supplierPayablesMmk = extras.supplierPayablesMmk;
+    dto.otherPayablesMmk = extras.otherPayablesMmk;
     dto.payablesMmk = calc.payablesMmk;
     dto.excludedPhysicalAssetsMmk = extras.excludedPhysicalAssetsMmk;
     dto.netZakatableMmk = calc.netZakatableMmk;

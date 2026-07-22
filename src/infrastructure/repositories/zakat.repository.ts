@@ -118,12 +118,29 @@ export class ZakatRepository implements IZakatRepository {
       _sum: { bookValueMmk: true },
     });
 
+    const poRows = await this.prisma.purchaseOrder.findMany({
+      where: {
+        deletedAt: null,
+        status: { notIn: ['DRAFT', 'CANCELLED'] },
+      },
+      select: { totalAmountMmk: true, amountPaidMmk: true },
+    });
+    let supplierPayablesMmk = 0;
+    for (const r of poRows) {
+      supplierPayablesMmk += Math.max(
+        0,
+        Number(r.totalAmountMmk) - Number(r.amountPaidMmk),
+      );
+    }
+    supplierPayablesMmk = Math.round(supplierPayablesMmk * 100) / 100;
+
     return {
       receivablesMmk: await this.sumOpenReceivablesMmk(),
       finishedGoodsValueMmk:
         Math.round(finishedGoodsValueMmk * 100) / 100,
       rawMaterialsValueMmk: Math.round(rawMaterialsValueMmk * 100) / 100,
       excludedPhysicalAssetsMmk: num(assets._sum.bookValueMmk),
+      supplierPayablesMmk,
       stockLines,
       warnings,
     };

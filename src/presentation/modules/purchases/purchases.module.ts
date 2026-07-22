@@ -7,6 +7,10 @@ import {
   GetPurchaseOrderUseCase,
   ListPurchaseOrdersUseCase,
 } from '../../../application/use-cases/purchases/list-get-cancel-purchase.use-case.js';
+import {
+  GetSupplierPayablesUseCase,
+  RecordPurchasePaymentUseCase,
+} from '../../../application/use-cases/purchases/supplier-payables.use-case.js';
 import { PURCHASE_REPOSITORY } from '../../../domain/repositories/purchase.repository.interface.js';
 import { PurchaseRepository } from '../../../infrastructure/repositories/purchase.repository.js';
 import { INVENTORY_REPOSITORY } from '../../../domain/repositories/inventory.repository.interface.js';
@@ -22,6 +26,8 @@ import { UserRepository } from '../../../infrastructure/repositories/user.reposi
     ListPurchaseOrdersUseCase,
     GetPurchaseOrderUseCase,
     CancelPurchaseOrderUseCase,
+    RecordPurchasePaymentUseCase,
+    GetSupplierPayablesUseCase,
     { provide: PURCHASE_REPOSITORY, useClass: PurchaseRepository },
     { provide: INVENTORY_REPOSITORY, useClass: InventoryRepository },
     { provide: USER_REPOSITORY, useClass: UserRepository },

@@ -68,6 +68,10 @@ import {
   GetPurchaseOrderUseCase,
   ListPurchaseOrdersUseCase,
 } from '../../../application/use-cases/purchases/list-get-cancel-purchase.use-case.js';
+import {
+  GetSupplierPayablesUseCase,
+  RecordPurchasePaymentUseCase,
+} from '../../../application/use-cases/purchases/supplier-payables.use-case.js';
 import { OutboundController } from '../outbound/outbound.controller.js';
 import { ListOutboundsUseCase } from '../../../application/use-cases/outbound/list-outbounds.use-case.js';
 import { CreateOutboundUseCase } from '../../../application/use-cases/outbound/create-outbound.use-case.js';
@@ -241,6 +245,8 @@ describe('Split feature controllers', () => {
       CreatePurchaseOrderUseCase,
       ReceivePurchaseOrderUseCase,
       CancelPurchaseOrderUseCase,
+      RecordPurchasePaymentUseCase,
+      GetSupplierPayablesUseCase,
       ListOutboundsUseCase,
       CreateOutboundUseCase,
       TransitionOutboundStatusUseCase,

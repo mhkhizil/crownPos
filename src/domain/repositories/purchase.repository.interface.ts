@@ -1,4 +1,7 @@
-import type { PurchaseOrderEntity } from '../entities/purchase-order.entity.js';
+import type {
+  PurchaseOrderEntity,
+  SupplierPayablesSummary,
+} from '../entities/purchase-order.entity.js';
 import type { PurchaseStatus } from '../enums/purchase-status.enum.js';
 
 export const PURCHASE_REPOSITORY = Symbol('PURCHASE_REPOSITORY');
@@ -41,6 +44,11 @@ export interface ReceivePurchaseOrderInput {
   inventoryBumps?: ReceivePurchaseInventoryBump[];
 }
 
+export interface RecordPurchasePaymentInput {
+  purchaseOrderId: string;
+  amountMmk: number;
+}
+
 export interface IPurchaseRepository {
   createPurchaseOrder(
     data: CreatePurchaseOrderInput,
@@ -51,4 +59,10 @@ export interface IPurchaseRepository {
     data: ReceivePurchaseOrderInput,
   ): Promise<PurchaseOrderEntity>;
   cancelPurchaseOrder(id: string): Promise<PurchaseOrderEntity>;
+  recordPurchasePayment(
+    data: RecordPurchasePaymentInput,
+  ): Promise<PurchaseOrderEntity>;
+  getSupplierPayables(supplierId: string): Promise<SupplierPayablesSummary>;
+  /** Open supplier AP for zakat (non-draft/cancelled POs with balance due). */
+  sumOpenSupplierPayablesMmk(): Promise<number>;
 }

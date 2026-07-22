@@ -65,6 +65,13 @@ export class ReceivePurchaseOrderDto {
   stockLocationId?: string;
 }
 
+export class RecordPurchasePaymentDto {
+  @ApiProperty({ description: 'Amount paid to supplier against this PO' })
+  @IsNumber()
+  @Min(0.01)
+  amountMmk!: number;
+}
+
 function copy<T extends object>(Ctor: new () => T, data: Partial<T>): T {
   const d = new Ctor();
   Object.assign(d, data);
@@ -89,6 +96,10 @@ export class PurchaseOrderResponseDto {
   @ApiProperty() orderDate!: string;
   @ApiProperty({ enum: PurchaseStatus }) status!: PurchaseStatus;
   @ApiProperty() totalAmountMmk!: number;
+  @ApiProperty() amountPaidMmk!: number;
+  @ApiProperty() balanceDueMmk!: number;
+  @ApiProperty({ enum: ['UNPAID', 'PARTIALLY_PAID', 'PAID'] })
+  paymentStatus!: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID';
   @ApiPropertyOptional({ nullable: true }) notes!: string | null;
   @ApiProperty({ type: [PurchaseOrderLineResponseDto] })
   lines!: PurchaseOrderLineResponseDto[];
@@ -103,6 +114,9 @@ export class PurchaseOrderResponseDto {
       orderDate: e.orderDate.toISOString().slice(0, 10),
       status: e.status,
       totalAmountMmk: e.totalAmountMmk,
+      amountPaidMmk: e.amountPaidMmk,
+      balanceDueMmk: e.balanceDueMmk(),
+      paymentStatus: e.paymentStatus(),
       notes: e.notes,
       lines: e.lines.map((l) =>
         copy(PurchaseOrderLineResponseDto, {
@@ -116,6 +130,66 @@ export class PurchaseOrderResponseDto {
         }),
       ),
       createdAt: e.createdAt.toISOString(),
+    });
+  }
+}
+
+export class SupplierPayableOrderDto {
+  @ApiProperty() purchaseOrderId!: string;
+  @ApiProperty() orderNumber!: string;
+  @ApiProperty() orderDate!: string;
+  @ApiProperty() status!: string;
+  @ApiProperty() totalAmountMmk!: number;
+  @ApiProperty() amountPaidMmk!: number;
+  @ApiProperty() balanceDueMmk!: number;
+  @ApiProperty() paymentStatus!: string;
+}
+
+export class SupplierPayablesResponseDto {
+  @ApiProperty() supplierId!: string;
+  @ApiProperty() totalOrderedMmk!: number;
+  @ApiProperty() totalPaidMmk!: number;
+  @ApiProperty({ description: 'How much is still owed to this supplier' })
+  amountLeftMmk!: number;
+  @ApiProperty() isFullyPaid!: boolean;
+  @ApiProperty({ type: [SupplierPayableOrderDto] })
+  orders!: SupplierPayableOrderDto[];
+
+  static fromSummary(s: {
+    supplierId: string;
+    totalOrderedMmk: number;
+    totalPaidMmk: number;
+    amountLeftMmk: number;
+    isFullyPaid: boolean;
+    orders: Array<{
+      purchaseOrderId: string;
+      orderNumber: string;
+      orderDate: Date;
+      status: string;
+      totalAmountMmk: number;
+      amountPaidMmk: number;
+      balanceDueMmk: number;
+      paymentStatus: string;
+    }>;
+  }): SupplierPayablesResponseDto {
+    return copy(SupplierPayablesResponseDto, {
+      supplierId: s.supplierId,
+      totalOrderedMmk: s.totalOrderedMmk,
+      totalPaidMmk: s.totalPaidMmk,
+      amountLeftMmk: s.amountLeftMmk,
+      isFullyPaid: s.isFullyPaid,
+      orders: s.orders.map((o) =>
+        copy(SupplierPayableOrderDto, {
+          purchaseOrderId: o.purchaseOrderId,
+          orderNumber: o.orderNumber,
+          orderDate: o.orderDate.toISOString().slice(0, 10),
+          status: o.status,
+          totalAmountMmk: o.totalAmountMmk,
+          amountPaidMmk: o.amountPaidMmk,
+          balanceDueMmk: o.balanceDueMmk,
+          paymentStatus: o.paymentStatus,
+        }),
+      ),
     });
   }
 }

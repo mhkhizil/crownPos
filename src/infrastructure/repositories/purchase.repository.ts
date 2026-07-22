@@ -12,10 +12,15 @@ import {
 import { PurchaseOrderMapper } from '../mappers/purchase-order.mapper.js';
 import { PurchaseStatus } from '../../domain/enums/purchase-status.enum.js';
 import type { PurchaseOrderEntity } from '../../domain/entities/purchase-order.entity.js';
+import {
+  SupplierPayableOrderLine,
+  SupplierPayablesSummary,
+} from '../../domain/entities/purchase-order.entity.js';
 import type {
   CreatePurchaseOrderInput,
   IPurchaseRepository,
   ReceivePurchaseOrderInput,
+  RecordPurchasePaymentInput,
 } from '../../domain/repositories/purchase.repository.interface.js';
 
 @Injectable()
@@ -252,4 +257,113 @@ export class PurchaseRepository implements IPurchaseRepository {
     });
     return PurchaseOrderMapper.toDomain(row);
   }
+
+  async recordPurchasePayment(
+    data: RecordPurchasePaymentInput,
+  ): Promise<PurchaseOrderEntity> {
+    if (!(data.amountMmk > 0)) {
+      throw new BadRequestException('Payment amount must be positive');
+    }
+
+    const existing = await this.prisma.purchaseOrder.findFirst({
+      where: { id: data.purchaseOrderId, deletedAt: null },
+      include: { lines: { where: { deletedAt: null } } },
+    });
+    if (!existing) throw new NotFoundException('Purchase order not found');
+    if (existing.status === PurchaseStatus.DRAFT) {
+      throw new BadRequestException('Cannot pay a DRAFT purchase order');
+    }
+    if (existing.status === PurchaseStatus.CANCELLED) {
+      throw new BadRequestException('Cannot pay a CANCELLED purchase order');
+    }
+
+    const total = Number(existing.totalAmountMmk);
+    const paid = Number(existing.amountPaidMmk);
+    const balance = Math.max(0, total - paid);
+    if (data.amountMmk > balance + 1e-9) {
+      throw new BadRequestException(
+        `Payment ${data.amountMmk} exceeds balance due ${balance}`,
+      );
+    }
+
+    const row = await this.prisma.purchaseOrder.update({
+      where: { id: existing.id },
+      data: {
+        amountPaidMmk: toDecimal(paid + data.amountMmk),
+      },
+      include: { lines: { where: { deletedAt: null } } },
+    });
+    return PurchaseOrderMapper.toDomain(row);
+  }
+
+  async getSupplierPayables(
+    supplierId: string,
+  ): Promise<SupplierPayablesSummary> {
+    const supplier = await this.prisma.supplier.findFirst({
+      where: { id: supplierId, deletedAt: null },
+    });
+    if (!supplier) throw new NotFoundException('Supplier not found');
+
+    const rows = await this.prisma.purchaseOrder.findMany({
+      where: {
+        supplierId,
+        deletedAt: null,
+        status: { notIn: [PurchaseStatus.DRAFT, PurchaseStatus.CANCELLED] },
+      },
+      include: { lines: { where: { deletedAt: null } } },
+      orderBy: { orderDate: 'desc' },
+    });
+
+    const orders = rows.map((r) => {
+      const e = PurchaseOrderMapper.toDomain(r);
+      return new SupplierPayableOrderLine(
+        e.id,
+        e.orderNumber,
+        e.orderDate,
+        e.status,
+        e.totalAmountMmk,
+        e.amountPaidMmk,
+        e.balanceDueMmk(),
+        e.paymentStatus(),
+      );
+    });
+
+    const totalOrderedMmk = round2(
+      orders.reduce((s, o) => s + o.totalAmountMmk, 0),
+    );
+    const totalPaidMmk = round2(
+      orders.reduce((s, o) => s + o.amountPaidMmk, 0),
+    );
+    const amountLeftMmk = round2(
+      orders.reduce((s, o) => s + o.balanceDueMmk, 0),
+    );
+
+    return new SupplierPayablesSummary(
+      supplierId,
+      totalOrderedMmk,
+      totalPaidMmk,
+      amountLeftMmk,
+      amountLeftMmk <= 0,
+      orders,
+    );
+  }
+
+  async sumOpenSupplierPayablesMmk(): Promise<number> {
+    const rows = await this.prisma.purchaseOrder.findMany({
+      where: {
+        deletedAt: null,
+        status: { notIn: [PurchaseStatus.DRAFT, PurchaseStatus.CANCELLED] },
+      },
+      select: { totalAmountMmk: true, amountPaidMmk: true },
+    });
+    let sum = 0;
+    for (const r of rows) {
+      sum += Math.max(0, Number(r.totalAmountMmk) - Number(r.amountPaidMmk));
+    }
+    return round2(sum);
+  }
+}
+
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }

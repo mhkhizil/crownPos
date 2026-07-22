@@ -24,11 +24,17 @@ import {
   GetPurchaseOrderUseCase,
   ListPurchaseOrdersUseCase,
 } from '../../../application/use-cases/purchases/list-get-cancel-purchase.use-case.js';
+import {
+  GetSupplierPayablesUseCase,
+  RecordPurchasePaymentUseCase,
+} from '../../../application/use-cases/purchases/supplier-payables.use-case.js';
 import { ROUTE_PREFIX } from '../../routing.paths.js';
 import {
   CreatePurchaseOrderDto,
   PurchaseOrderResponseDto,
   ReceivePurchaseOrderDto,
+  RecordPurchasePaymentDto,
+  SupplierPayablesResponseDto,
 } from '../../../application/dtos/purchases/index.js';
 
 @ApiTags('Purchases / Raw inbound')
@@ -42,6 +48,8 @@ export class PurchasesController {
     private readonly getPurchase: GetPurchaseOrderUseCase,
     private readonly receivePurchase: ReceivePurchaseOrderUseCase,
     private readonly cancelPurchase: CancelPurchaseOrderUseCase,
+    private readonly recordPayment: RecordPurchasePaymentUseCase,
+    private readonly getSupplierPayables: GetSupplierPayablesUseCase,
   ) {}
 
   @Get()
@@ -54,6 +62,25 @@ export class PurchasesController {
     @CurrentUser() u: JwtPayload,
   ): Promise<ApiResponseDto<PurchaseOrderResponseDto[]>> {
     return ApiResponseDto.success(await this.listPurchases.execute(u.sub));
+  }
+
+  @Get('suppliers/:supplierId/payables')
+  @ApiOperation({
+    summary: 'Supplier payables: paid / amount left per PO',
+    description:
+      'Shows whether each non-draft/cancelled PO for this supplier is unpaid, partially paid, or paid, plus totals.',
+  })
+  @ApiSuccessResponse(SupplierPayablesResponseDto, {
+    status: HttpStatus.OK,
+    description: 'Supplier payables retrieved',
+  })
+  async supplierPayables(
+    @CurrentUser() u: JwtPayload,
+    @Param('supplierId') supplierId: string,
+  ): Promise<ApiResponseDto<SupplierPayablesResponseDto>> {
+    return ApiResponseDto.success(
+      await this.getSupplierPayables.execute(u.sub, supplierId),
+    );
   }
 
   @Get(':id')
@@ -111,6 +138,28 @@ export class PurchasesController {
     return ApiResponseDto.success(
       await this.receivePurchase.execute(u.sub, id, body),
       'Raw materials received into inventory',
+    );
+  }
+
+  @Post(':id/payments')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Record payment to supplier against a purchase order',
+    description:
+      'Increases amountPaidMmk. Balance due = total − paid. Used for supplier AP and zakat auto-payables.',
+  })
+  @ApiSuccessResponse(PurchaseOrderResponseDto, {
+    status: HttpStatus.OK,
+    description: 'Supplier payment recorded',
+  })
+  async pay(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Body() body: RecordPurchasePaymentDto,
+  ): Promise<ApiResponseDto<PurchaseOrderResponseDto>> {
+    return ApiResponseDto.success(
+      await this.recordPayment.execute(u.sub, id, body),
+      'Supplier payment recorded',
     );
   }
 

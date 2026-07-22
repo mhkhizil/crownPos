@@ -562,6 +562,8 @@ model PurchaseOrder {
   orderDate     DateTime       @db.Date
   status        PurchaseStatus @default(DRAFT)
   totalAmountMmk Decimal       @default(0) @db.Decimal(18, 2)
+  /// Cumulative payments made to the supplier against this PO (AP).
+  amountPaidMmk Decimal        @default(0) @db.Decimal(18, 2)
   notes         String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt

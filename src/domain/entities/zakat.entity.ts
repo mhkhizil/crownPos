@@ -45,6 +45,8 @@ export interface ZakatWealthSnapshot {
   finishedGoodsValueMmk: number;
   rawMaterialsValueMmk: number;
   excludedPhysicalAssetsMmk: number;
+  /** Open supplier PO balances (total − paid), non-draft/cancelled. */
+  supplierPayablesMmk: number;
   stockLines: StockValuationLine[];
   warnings: string[];
 }

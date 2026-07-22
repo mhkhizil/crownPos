@@ -125,6 +125,21 @@ export async function arrangeZakatManualFixture(
     data: { bookValueMmk: ZAKAT_MANUAL.excludedBookValueMmk },
   });
 
+  // Clear supplier AP so M1–M5 hand formula is not shifted by seed PO balances.
+  const openPos = await prisma.purchaseOrder.findMany({
+    where: {
+      deletedAt: null,
+      status: { notIn: ['DRAFT', 'CANCELLED'] },
+    },
+    select: { id: true, totalAmountMmk: true },
+  });
+  for (const po of openPos) {
+    await prisma.purchaseOrder.update({
+      where: { id: po.id },
+      data: { amountPaidMmk: po.totalAmountMmk },
+    });
+  }
+
   return {
     invoiceId: inv.id,
     restore: async () => {

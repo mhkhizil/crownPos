@@ -21,6 +21,7 @@ export class PurchaseOrderMapper {
     orderDate: Date;
     status: string;
     totalAmountMmk: { toNumber?: () => number } | number;
+    amountPaidMmk?: { toNumber?: () => number } | number | null;
     notes: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -60,6 +61,7 @@ export class PurchaseOrderMapper {
       row.orderDate,
       row.status as PurchaseStatus,
       num(row.totalAmountMmk),
+      num(row.amountPaidMmk),
       row.notes,
       lines,
       row.createdAt,

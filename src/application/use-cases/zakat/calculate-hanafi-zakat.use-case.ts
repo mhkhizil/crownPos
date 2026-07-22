@@ -34,6 +34,10 @@ export class CalculateHanafiZakatUseCase {
     await requirePermission(this.users, actorId, PermissionCode.MANAGE_BD);
 
     const snapshot = await this.zakat.getWealthSnapshot();
+    const otherPayablesMmk = body.payablesMmk ?? 0;
+    const payablesMmk =
+      Math.round((snapshot.supplierPayablesMmk + otherPayablesMmk) * 100) /
+      100;
 
     let calc;
     try {
@@ -43,7 +47,7 @@ export class CalculateHanafiZakatUseCase {
         receivablesMmk: snapshot.receivablesMmk,
         finishedGoodsValueMmk: snapshot.finishedGoodsValueMmk,
         rawMaterialsValueMmk: snapshot.rawMaterialsValueMmk,
-        payablesMmk: body.payablesMmk ?? 0,
+        payablesMmk,
         haulCompleted: body.haulCompleted,
         nisabStyle: body.nisabStyle,
         goldPricePerGramMmk: body.goldPricePerGramMmk,
@@ -71,6 +75,8 @@ export class CalculateHanafiZakatUseCase {
 
     return HanafiZakatCalculateResponseDto.fromCalc(calc, {
       excludedPhysicalAssetsMmk: snapshot.excludedPhysicalAssetsMmk,
+      supplierPayablesMmk: snapshot.supplierPayablesMmk,
+      otherPayablesMmk,
       warnings: snapshot.warnings,
       overlappingPayments: overlapping,
     });

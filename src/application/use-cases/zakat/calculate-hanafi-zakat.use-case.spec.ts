@@ -51,6 +51,7 @@ describe('CalculateHanafiZakatUseCase', () => {
       finishedGoodsValueMmk: 100_000,
       rawMaterialsValueMmk: 10_000,
       excludedPhysicalAssetsMmk: 5_000_000,
+      supplierPayablesMmk: 40_000,
       stockLines: [],
       warnings: [],
     });
@@ -67,15 +68,19 @@ describe('CalculateHanafiZakatUseCase', () => {
       silverPricePerGramMmk: 1000,
       cashOnHandMmk: 500_000,
       bankBalanceMmk: 0,
-      payablesMmk: 0,
+      payablesMmk: 10_000,
       haulCompleted: true,
     });
     expect(r.receivablesMmk).toBe(50_000);
     expect(r.finishedGoodsValueMmk).toBe(100_000);
     expect(r.excludedPhysicalAssetsMmk).toBe(5_000_000);
-    expect(r.netZakatableMmk).toBe(660_000);
-    expect(r.zakatDueMmk).toBe(16_500);
+    expect(r.supplierPayablesMmk).toBe(40_000);
+    expect(r.otherPayablesMmk).toBe(10_000);
+    expect(r.payablesMmk).toBe(50_000);
+    expect(r.netZakatableMmk).toBe(610_000);
+    expect(r.zakatDueMmk).toBe(15_250);
     expect(r.considerations).toContain('MANUAL_CASH');
+    expect(r.considerations).toContain('SUPPLIER_AP_AUTO');
   });
 
   it('rejects without MANAGE_BD', async () => {

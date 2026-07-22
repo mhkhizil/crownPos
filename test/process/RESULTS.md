@@ -147,5 +147,10 @@ Env: `PUSHER_*`, optional `COLLECTION_REMINDER_DISPATCH_ENABLED=false` to pause 
 | `.../zakat/payments` | MONTH / YEAR / CUSTOM payment tracker |
 | Domain calculator + period resolver | Pure math (unit Z/P) |
 | `npm run test:zakat` | Unit zakat + process tracker + M1–M5 manual verify |
+| `PurchaseOrder.amountPaidMmk` + payables APIs | Supplier paid / amount left; zakat auto-deducts unpaid PO balance |
+| `GET .../purchases/suppliers/:id/payables` | Per-supplier AP summary |
+| `POST .../purchases/:id/payments` | Record supplier payment on a PO |
 
 **Run stamp:** 2026-07-23 — unit zakat **18/18**; process zakat-hanafi **9/9** (tracker + M1–M5). Re-seed after manual-verify.
+
+Loans / non-PO liabilities stay manual via calculate `payablesMmk` (`MANUAL_OTHER_LIABILITIES`).
