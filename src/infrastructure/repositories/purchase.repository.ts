@@ -11,6 +11,10 @@ import {
 } from './_prisma-helpers.js';
 import { PurchaseOrderMapper } from '../mappers/purchase-order.mapper.js';
 import { PurchaseStatus } from '../../domain/enums/purchase-status.enum.js';
+import { CashLedgerAccount } from '../../domain/enums/cash-ledger-account.enum.js';
+import { CashLedgerCategory } from '../../domain/enums/cash-ledger-category.enum.js';
+import { CashLedgerDirection } from '../../domain/enums/cash-ledger-direction.enum.js';
+import { CashLedgerSource } from '../../domain/enums/cash-ledger-source.enum.js';
 import type { PurchaseOrderEntity } from '../../domain/entities/purchase-order.entity.js';
 import {
   SupplierPayableOrderLine,
@@ -286,12 +290,33 @@ export class PurchaseRepository implements IPurchaseRepository {
       );
     }
 
-    const row = await this.prisma.purchaseOrder.update({
-      where: { id: existing.id },
-      data: {
-        amountPaidMmk: toDecimal(paid + data.amountMmk),
-      },
-      include: { lines: { where: { deletedAt: null } } },
+    const account = data.account ?? CashLedgerAccount.BANK;
+    const paidAt = data.paidAt
+      ? toDateOnly(data.paidAt)
+      : toDateOnly(new Date().toISOString().slice(0, 10));
+    const sourceRef = `po-payment:${existing.id}:${Date.now()}:${data.amountMmk}`;
+
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.purchaseOrder.update({
+        where: { id: existing.id },
+        data: {
+          amountPaidMmk: toDecimal(paid + data.amountMmk),
+        },
+        include: { lines: { where: { deletedAt: null } } },
+      });
+      await tx.cashLedgerEntry.create({
+        data: {
+          entryDate: paidAt,
+          direction: CashLedgerDirection.OUTFLOW,
+          account,
+          category: CashLedgerCategory.BUSINESS_SUPPLIER_PAYMENT,
+          source: CashLedgerSource.BUSINESS,
+          sourceRef,
+          amountMmk: toDecimal(data.amountMmk),
+          notes: `Auto: supplier payment on PO ${existing.orderNumber}`,
+        },
+      });
+      return updated;
     });
     return PurchaseOrderMapper.toDomain(row);
   }

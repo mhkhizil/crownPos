@@ -11,8 +11,14 @@ import {
   toDecimal,
 } from './_prisma-helpers.js';
 import { BillingMapper } from '../mappers/billing.mapper.js';
+import { InvoiceRecoverability } from '../../domain/enums/invoice-recoverability.enum.js';
 import { InvoiceStatus } from '../../domain/enums/invoice-status.enum.js';
+import { PaymentMethod } from '../../domain/enums/payment-method.enum.js';
 import { PaymentStatus } from '../../domain/enums/payment-status.enum.js';
+import { CashLedgerAccount } from '../../domain/enums/cash-ledger-account.enum.js';
+import { CashLedgerCategory } from '../../domain/enums/cash-ledger-category.enum.js';
+import { CashLedgerDirection } from '../../domain/enums/cash-ledger-direction.enum.js';
+import { CashLedgerSource } from '../../domain/enums/cash-ledger-source.enum.js';
 import type {
   CreateCollectionReminderInput,
   IBillingRepository,
@@ -73,6 +79,33 @@ export class BillingRepository implements IBillingRepository {
     return BillingMapper.invoiceToDomain(row);
   }
 
+  async findInvoiceById(id: string): Promise<InvoiceEntity | null> {
+    const row = await this.prisma.invoice.findFirst({
+      where: { id, deletedAt: null },
+      include: { lines: true },
+    });
+    return row ? BillingMapper.invoiceToDomain(row) : null;
+  }
+
+  async updateInvoiceRecoverability(
+    id: string,
+    recoverability: InvoiceRecoverability,
+  ): Promise<InvoiceEntity> {
+    const existing = await this.prisma.invoice.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new NotFoundException(`Invoice ${id} not found`);
+    }
+    const row = await this.prisma.invoice.update({
+      where: { id },
+      data: { recoverability },
+      include: { lines: true },
+    });
+    return BillingMapper.invoiceToDomain(row);
+  }
+
   async recordPayment(data: RecordPaymentInput): Promise<RecordPaymentResult> {
     const allocSum = data.allocations.reduce((s, a) => s + a.amountMmk, 0);
     if (Math.abs(allocSum - data.amountMmk) > 0.001) {
@@ -110,6 +143,24 @@ export class BillingRepository implements IBillingRepository {
         },
       },
       include: { allocations: true },
+    });
+
+    const ledgerAccount =
+      data.method === PaymentMethod.CASH_ON_DELIVERY
+        ? CashLedgerAccount.CASH
+        : CashLedgerAccount.BANK;
+
+    await this.prisma.cashLedgerEntry.create({
+      data: {
+        entryDate: toDateOnly(data.paymentDate),
+        direction: CashLedgerDirection.INFLOW,
+        account: ledgerAccount,
+        category: CashLedgerCategory.BUSINESS_COLLECTION,
+        source: CashLedgerSource.BUSINESS,
+        sourceRef: `payment:${payment.id}`,
+        amountMmk: toDecimal(data.amountMmk),
+        notes: `Auto: invoice payment ${payment.paymentNumber}`,
+      },
     });
 
     const invoiceEffects: PaymentInvoiceEffect[] = [];

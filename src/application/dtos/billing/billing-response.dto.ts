@@ -4,13 +4,22 @@ import type {
   InvoiceEntity,
   PaymentEntity,
 } from '../../../domain/entities/billing.entity.js';
+import { InvoiceRecoverability } from '../../../domain/enums/invoice-recoverability.enum.js';
+import { InvoiceStatus } from '../../../domain/enums/invoice-status.enum.js';
 
 export class InvoiceResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() invoiceNumber!: string;
   @ApiProperty() customerId!: string;
   @ApiPropertyOptional({ nullable: true }) salesOrderId!: string | null;
-  @ApiProperty() status!: string;
+  @ApiProperty({ enum: InvoiceStatus }) status!: InvoiceStatus;
+  @ApiProperty({
+    enum: InvoiceRecoverability,
+    description:
+      'Zakat recoverability flag. Only LIKELY open balances enter zakat receivablesMmk. ' +
+      'DOUBTFUL / HOPELESS balances appear on calculate as excludedDoubtfulReceivablesMmk.',
+  })
+  recoverability!: InvoiceRecoverability;
   @ApiProperty() totalMmk!: number;
   @ApiProperty() amountPaidMmk!: number;
   @ApiProperty() balanceDueMmk!: number;
@@ -31,6 +40,7 @@ export class InvoiceResponseDto {
     dto.customerId = e.customerId;
     dto.salesOrderId = e.salesOrderId;
     dto.status = e.status;
+    dto.recoverability = e.recoverability;
     dto.totalMmk = e.totalMmk;
     dto.amountPaidMmk = e.amountPaidMmk;
     dto.balanceDueMmk = e.balanceDueMmk;

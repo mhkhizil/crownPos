@@ -4,6 +4,7 @@ import type {
   InvoiceEntity,
   PaymentEntity,
 } from '../entities/billing.entity.js';
+import type { InvoiceRecoverability } from '../enums/invoice-recoverability.enum.js';
 import type { InvoiceStatus } from '../enums/invoice-status.enum.js';
 import type { PaymentMethod } from '../enums/payment-method.enum.js';
 
@@ -48,6 +49,11 @@ export interface IBillingRepository {
   createInvoiceFromOrder(
     salesOrderId: string,
     dueDate?: string,
+  ): Promise<InvoiceEntity>;
+  findInvoiceById(id: string): Promise<InvoiceEntity | null>;
+  updateInvoiceRecoverability(
+    id: string,
+    recoverability: InvoiceRecoverability,
   ): Promise<InvoiceEntity>;
   recordPayment(data: RecordPaymentInput): Promise<RecordPaymentResult>;
   createCollectionReminder(

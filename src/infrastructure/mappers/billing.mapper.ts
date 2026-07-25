@@ -9,6 +9,7 @@ import {
   PaymentEntity,
 } from '../../domain/entities/billing.entity.js';
 import { CollectionReminderStatus } from '../../domain/enums/collection-reminder-status.enum.js';
+import { InvoiceRecoverability } from '../../domain/enums/invoice-recoverability.enum.js';
 import { InvoiceStatus } from '../../domain/enums/invoice-status.enum.js';
 import { PaymentMethod } from '../../domain/enums/payment-method.enum.js';
 import { PaymentStatus } from '../../domain/enums/payment-status.enum.js';
@@ -36,6 +37,7 @@ export class BillingMapper {
       row.issueDate,
       row.dueDate,
       row.status as InvoiceStatus,
+      row.recoverability as InvoiceRecoverability,
       num(row.subtotalMmk),
       num(row.totalMmk),
       num(row.amountPaidMmk),

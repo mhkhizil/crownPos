@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsEnum,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -13,6 +14,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import type { PurchaseOrderEntity } from '../../../domain/entities/purchase-order.entity.js';
+import { CashLedgerAccount } from '../../../domain/enums/cash-ledger-account.enum.js';
 import { PurchaseStatus } from '../../../domain/enums/purchase-status.enum.js';
 
 export class PurchaseOrderLineDto {
@@ -70,6 +72,24 @@ export class RecordPurchasePaymentDto {
   @IsNumber()
   @Min(0.01)
   amountMmk!: number;
+
+  @ApiPropertyOptional({
+    enum: ['CASH', 'BANK'],
+    default: 'BANK',
+    description:
+      'Which pocket paid the supplier. Auto-posts an OUTFLOW BUSINESS cash-ledger row.',
+  })
+  @IsOptional()
+  @IsEnum(CashLedgerAccount)
+  account?: CashLedgerAccount;
+
+  @ApiPropertyOptional({
+    example: '2026-07-26',
+    description: 'Payment day for the cash book (default: today UTC).',
+  })
+  @IsOptional()
+  @IsDateString()
+  paidAt?: string;
 }
 
 function copy<T extends object>(Ctor: new () => T, data: Partial<T>): T {

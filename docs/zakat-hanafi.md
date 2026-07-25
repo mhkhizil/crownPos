@@ -6,8 +6,10 @@ This is an **ops estimate**, not a fatwa. Consult a local scholar for edge cases
 
 | Bucket | Source |
 |---|---|
-| Cash / bank | Manual on calculate request |
-| Receivables | Open invoices (`balanceDueMmk`), excluding DRAFT / CANCELLED / WRITTEN_OFF |
+| Cash / bank | Manual, **or** `useCashLedgerBalances` from ledger **TOTAL** (business auto + manual) |
+| Cash ledger views | `view=BUSINESS` (sales/PO only), `MANUAL` (custom only), `TOTAL` (both) |
+| Receivables | Open invoices with `recoverability=LIKELY` (`balanceDueMmk`); excludes DRAFT / CANCELLED / WRITTEN_OFF and DOUBTFUL / HOPELESS |
+| Doubtful / hopeless AR | Auto-excluded; shown as `excludedDoubtfulReceivablesMmk`. Set via `PATCH .../billing/invoices/:id/recoverability` |
 | Finished goods | Inventory qty × city sell price (else latest invoice line) |
 | Raw materials | Inventory qty × last PO / supplier cost |
 | **Supplier payables (AP)** | **Auto:** sum of PO `totalAmountMmk − amountPaidMmk` (excludes DRAFT / CANCELLED) |
@@ -31,7 +33,12 @@ Loans / non-PO debts are still manual (`MANUAL_OTHER_LIABILITIES`).
 
 **Yearly only** (Gregorian calendar year) — not daily/monthly.
 
-- `POST /api/v1/admin/dashboard/bd-analytics/zakat/hanafi/calculate` — optional `year` (default: current UTC year); overlapping payments are year-scoped
+- `POST .../bd-analytics/cash-ledger` — manual capital / personal / home / misc
+- `GET .../cash-ledger?view=BUSINESS|MANUAL|TOTAL&date=` — daily book by slice
+- `GET .../cash-ledger/balances?view=BUSINESS|MANUAL|TOTAL` — nets by slice
+- Auto BUSINESS posts: invoice payment → INFLOW; PO payment → OUTFLOW
+- `DELETE .../cash-ledger/:id`
+- `POST .../zakat/hanafi/calculate` — optional `useCashLedgerBalances` (TOTAL view)
 - `POST .../zakat/payments` — `periodType: YEAR` + `year` required
 - `GET .../zakat/payments` — list (optional `year` / date range)
 - `GET .../zakat/payments/coverage?periodType=YEAR&year=` — year coverage sum
@@ -41,9 +48,11 @@ Tracker periods are **Gregorian year** (ops ledger). Classical haul is lunar —
 
 ## Completeness codes (`considerations[]`)
 
-- `MANUAL_CASH`, `MANUAL_OTHER_LIABILITIES`
+- `MANUAL_CASH`, `CASH_LEDGER_CUSTOM_ONLY` — manual slice still needed for capital/personal; business slice auto-posts going forward
+- `MANUAL_OTHER_LIABILITIES`
+- `RECEIVABLES_RECOVERABILITY_FLAG` — staff marks invoices LIKELY / DOUBTFUL / HOPELESS; only LIKELY enters net
+- `GREGORIAN_TRACKER_NOT_LUNAR_HAUL`
 - `SUPPLIER_AP_AUTO` — supplier PO unpaid balances are deducted automatically
-- `NO_DOUBTFUL_DEBT_FILTER`, `GREGORIAN_TRACKER_NOT_LUNAR_HAUL`
 - `NO_WIP_VALUATION`, `NO_CONSIGNMENT_FLAG`, `BUSINESS_ONLY_NOT_PERSONAL`
 
 ## M1–M5 worksheet (manual-vs-system)
@@ -78,3 +87,20 @@ due = haul && net >= nisab ? round2(net * 0.025) : 0
 ```
 
 Run: `npm run test:zakat` then `npm run db:seed` (manual-verify mutates stock/AR).
+
+## Cash ledger loopholes (known / accepted)
+
+| Risk | Behavior today | Ops / test |
+|---|---|---|
+| Pre-go-live invoice/PO payments | Not backfilled into ledger | Only new payments auto-post |
+| Staff double-post | MANUAL OTHER can duplicate BUSINESS collection/PO pay → TOTAL overstates | Never manual-post shop collections or PO pays (CL8 documents) |
+| `useCashLedgerBalances` + `cashOnHandMmk: 0` | Explicit **0 wins** over ledger | Omit cash/bank fields when using ledger (CL10) |
+| Pocket overdraft | Net floored at 0; outflows still counted | Do not read 0 as “balanced” (CL6) |
+| `PaymentMethod.OTHER` | Always mapped to BANK | Prefer COD vs BANK_TRANSFER |
+| Soft-delete BUSINESS row | Allowed; removed from balances | Prefer correcting via new payments |
+| No CASH↔BANK transfer / wages auto | Missing unless MANUAL | Enter as MANUAL pairs / BUSINESS_EXPENSE |
+| Unpaid invoice | In AR only, not ledger | Correct (CL11) |
+
+**Views:** `BUSINESS` = auto sales/PO only; `MANUAL` = custom only; `TOTAL` = both. Do **not** sum `cashOnHand` across views — recompute from rows (unit worksheet F).
+
+Process suite: `npm run test:cash-ledger` (CL1–CL12).

@@ -44,6 +44,17 @@ export class CalculateHanafiZakatDto {
   @Min(0)
   silverPricePerGramMmk?: number;
 
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'If true, fill cashOnHandMmk / bankBalanceMmk from cash ledger **TOTAL** view ' +
+      '(BUSINESS auto posts + MANUAL custom) unless you also pass explicit cash/bank (explicit wins). ' +
+      'Use GET .../cash-ledger/balances?view=BUSINESS|MANUAL|TOTAL to inspect slices.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  useCashLedgerBalances?: boolean;
+
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
   @IsNumber()
@@ -198,6 +209,12 @@ export class HanafiZakatCalculateResponseDto {
   @ApiProperty() cashOnHandMmk!: number;
   @ApiProperty() bankBalanceMmk!: number;
   @ApiProperty() receivablesMmk!: number;
+  @ApiProperty({
+    description:
+      'Open invoice balances marked DOUBTFUL or HOPELESS. Shown for transparency; not included in netZakatableMmk. ' +
+      'Set via PATCH /admin/dashboard/billing/invoices/:id/recoverability.',
+  })
+  excludedDoubtfulReceivablesMmk!: number;
   @ApiProperty() finishedGoodsValueMmk!: number;
   @ApiProperty() rawMaterialsValueMmk!: number;
   @ApiProperty({ description: 'Auto supplier AP (PO balances)' })
@@ -222,6 +239,7 @@ export class HanafiZakatCalculateResponseDto {
     calc: HanafiZakatCalculationResult,
     extras: {
       excludedPhysicalAssetsMmk: number;
+      excludedDoubtfulReceivablesMmk: number;
       supplierPayablesMmk: number;
       otherPayablesMmk: number;
       warnings: string[];
@@ -236,6 +254,7 @@ export class HanafiZakatCalculateResponseDto {
     dto.cashOnHandMmk = calc.cashOnHandMmk;
     dto.bankBalanceMmk = calc.bankBalanceMmk;
     dto.receivablesMmk = calc.receivablesMmk;
+    dto.excludedDoubtfulReceivablesMmk = extras.excludedDoubtfulReceivablesMmk;
     dto.finishedGoodsValueMmk = calc.finishedGoodsValueMmk;
     dto.rawMaterialsValueMmk = calc.rawMaterialsValueMmk;
     dto.supplierPayablesMmk = extras.supplierPayablesMmk;

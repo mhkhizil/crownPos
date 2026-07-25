@@ -6,6 +6,7 @@ import { UserStatus } from '../../../domain/enums/user-status.enum.js';
 import { ZakatNisabStyle } from '../../../domain/enums/zakat-nisab-style.enum.js';
 import type { IUserRepository } from '../../../domain/repositories/user.repository.interface.js';
 import type { IZakatRepository } from '../../../domain/repositories/zakat.repository.interface.js';
+import type { ICashLedgerRepository } from '../../../domain/repositories/cash-ledger.repository.interface.js';
 import { CalculateHanafiZakatUseCase } from './calculate-hanafi-zakat.use-case.js';
 
 function buildUser(overrides: Partial<UserEntity> = {}): UserEntity {
@@ -40,6 +41,12 @@ describe('CalculateHanafiZakatUseCase', () => {
     listPayments: jest.fn(),
     softDeletePayment: jest.fn(),
   };
+  const cashLedger = {
+    getBalances: jest.fn(),
+    create: jest.fn(),
+    list: jest.fn(),
+    softDelete: jest.fn(),
+  };
 
   let useCase: CalculateHanafiZakatUseCase;
 
@@ -48,6 +55,7 @@ describe('CalculateHanafiZakatUseCase', () => {
     users.findById.mockResolvedValue(buildUser());
     zakat.getWealthSnapshot.mockResolvedValue({
       receivablesMmk: 50_000,
+      excludedDoubtfulReceivablesMmk: 25_000,
       finishedGoodsValueMmk: 100_000,
       rawMaterialsValueMmk: 10_000,
       excludedPhysicalAssetsMmk: 5_000_000,
@@ -56,9 +64,18 @@ describe('CalculateHanafiZakatUseCase', () => {
       warnings: [],
     });
     zakat.listPaymentsOverlapping.mockResolvedValue([]);
+    cashLedger.getBalances.mockResolvedValue({
+      view: 'TOTAL',
+      cashOnHandMmk: 0,
+      bankBalanceMmk: 0,
+      totalInflowsMmk: 0,
+      totalOutflowsMmk: 0,
+      asOfDate: null,
+    });
     useCase = new CalculateHanafiZakatUseCase(
       users as unknown as IUserRepository,
       zakat as unknown as IZakatRepository,
+      cashLedger as unknown as ICashLedgerRepository,
     );
   });
 
@@ -72,6 +89,7 @@ describe('CalculateHanafiZakatUseCase', () => {
       haulCompleted: true,
     });
     expect(r.receivablesMmk).toBe(50_000);
+    expect(r.excludedDoubtfulReceivablesMmk).toBe(25_000);
     expect(r.finishedGoodsValueMmk).toBe(100_000);
     expect(r.excludedPhysicalAssetsMmk).toBe(5_000_000);
     expect(r.supplierPayablesMmk).toBe(40_000);
@@ -81,6 +99,8 @@ describe('CalculateHanafiZakatUseCase', () => {
     expect(r.zakatDueMmk).toBe(15_250);
     expect(r.considerations).toContain('MANUAL_CASH');
     expect(r.considerations).toContain('SUPPLIER_AP_AUTO');
+    expect(r.considerations).toContain('RECEIVABLES_RECOVERABILITY_FLAG');
+    expect(r.considerations).not.toContain('NO_DOUBTFUL_DEBT_FILTER');
   });
 
   it('rejects without MANAGE_BD', async () => {

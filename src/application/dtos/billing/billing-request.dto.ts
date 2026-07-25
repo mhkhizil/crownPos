@@ -12,6 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { InvoiceRecoverability } from '../../../domain/enums/invoice-recoverability.enum.js';
 import { PaymentMethod } from '../../../domain/enums/payment-method.enum.js';
 
 export class CreateInvoiceFromOrderDto {
@@ -35,6 +36,22 @@ export class RecordPaymentDto {
   @ApiProperty({ type: [PaymentAllocationDto] })
   @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => PaymentAllocationDto)
   allocations!: PaymentAllocationDto[];
+}
+
+export class UpdateInvoiceRecoverabilityDto {
+  @ApiProperty({
+    enum: InvoiceRecoverability,
+    example: InvoiceRecoverability.DOUBTFUL,
+    description:
+      'Staff judgment of whether this open receivable is still zakatable wealth. ' +
+      'Independent of InvoiceStatus (OVERDUE does not auto-mean DOUBTFUL/HOPELESS). ' +
+      'LIKELY (default): balanceDue is included in Hanafi zakat receivables. ' +
+      'DOUBTFUL: excluded from zakat net until reclassified LIKELY or paid (then treat as cash that year). ' +
+      'HOPELESS: excluded from zakat like bad debt for estimate purposes; collection may continue. ' +
+      'WRITTEN_OFF status is a separate accounting close and is always excluded from AR.',
+  })
+  @IsEnum(InvoiceRecoverability)
+  recoverability!: InvoiceRecoverability;
 }
 
 export class CreateCollectionReminderDto {

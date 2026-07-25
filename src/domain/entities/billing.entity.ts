@@ -1,4 +1,5 @@
 import type { CollectionReminderStatus } from '../enums/collection-reminder-status.enum.js';
+import type { InvoiceRecoverability } from '../enums/invoice-recoverability.enum.js';
 import type { InvoiceStatus } from '../enums/invoice-status.enum.js';
 import type { PaymentMethod } from '../enums/payment-method.enum.js';
 import type { PaymentStatus } from '../enums/payment-status.enum.js';
@@ -23,6 +24,7 @@ export class InvoiceEntity {
     public readonly issueDate: Date,
     public readonly dueDate: Date | null,
     public readonly status: InvoiceStatus,
+    public readonly recoverability: InvoiceRecoverability,
     public readonly subtotalMmk: number,
     public readonly totalMmk: number,
     public readonly amountPaidMmk: number,

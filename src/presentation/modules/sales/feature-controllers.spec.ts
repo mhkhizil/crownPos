@@ -79,6 +79,7 @@ import { TransitionOutboundStatusUseCase } from '../../../application/use-cases/
 import { BillingController } from '../billing/billing.controller.js';
 import { ListInvoicesUseCase } from '../../../application/use-cases/billing/list-invoices.use-case.js';
 import { CreateInvoiceFromOrderUseCase } from '../../../application/use-cases/billing/create-invoice-from-order.use-case.js';
+import { UpdateInvoiceRecoverabilityUseCase } from '../../../application/use-cases/billing/update-invoice-recoverability.use-case.js';
 import { ListPaymentsUseCase } from '../../../application/use-cases/billing/list-payments.use-case.js';
 import { RecordPaymentUseCase } from '../../../application/use-cases/billing/record-payment.use-case.js';
 import { ListCollectionRemindersUseCase } from '../../../application/use-cases/billing/list-collection-reminders.use-case.js';
@@ -106,6 +107,12 @@ import { RecordZakatPaymentUseCase } from '../../../application/use-cases/zakat/
 import { ListZakatPaymentsUseCase } from '../../../application/use-cases/zakat/list-zakat-payments.use-case.js';
 import { GetZakatPaymentCoverageUseCase } from '../../../application/use-cases/zakat/get-zakat-payment-coverage.use-case.js';
 import { DeleteZakatPaymentUseCase } from '../../../application/use-cases/zakat/delete-zakat-payment.use-case.js';
+import {
+  CreateCashLedgerEntryUseCase,
+  DeleteCashLedgerEntryUseCase,
+  GetCashLedgerBalancesUseCase,
+  ListCashLedgerEntriesUseCase,
+} from '../../../application/use-cases/cash-ledger/cash-ledger.use-case.js';
 
 type AuthedCtx = {
   switchToHttp: () => {
@@ -252,6 +259,7 @@ describe('Split feature controllers', () => {
       TransitionOutboundStatusUseCase,
       ListInvoicesUseCase,
       CreateInvoiceFromOrderUseCase,
+      UpdateInvoiceRecoverabilityUseCase,
       ListPaymentsUseCase,
       RecordPaymentUseCase,
       ListCollectionRemindersUseCase,
@@ -277,6 +285,10 @@ describe('Split feature controllers', () => {
       ListZakatPaymentsUseCase,
       GetZakatPaymentCoverageUseCase,
       DeleteZakatPaymentUseCase,
+      CreateCashLedgerEntryUseCase,
+      ListCashLedgerEntriesUseCase,
+      GetCashLedgerBalancesUseCase,
+      DeleteCashLedgerEntryUseCase,
     ] as const;
 
     const { app, close } = await createHttpTestApp({

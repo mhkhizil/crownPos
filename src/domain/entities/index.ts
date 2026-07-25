@@ -8,3 +8,6 @@ export * from './billing.entity.js';
 export * from './pricing.entity.js';
 export * from './master-data.entity.js';
 export * from './bd-analytics.entity.js';
+export * from './zakat.entity.js';
+export * from './cash-ledger.entity.js';
+export * from './purchase-order.entity.js';

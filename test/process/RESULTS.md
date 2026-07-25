@@ -147,10 +147,20 @@ Env: `PUSHER_*`, optional `COLLECTION_REMINDER_DISPATCH_ENABLED=false` to pause 
 | `.../zakat/payments` | YEAR payment tracker (yearly only) |
 | Domain calculator + period resolver | Pure math (unit Z/P) |
 | `npm run test:zakat` | Unit zakat + process tracker + M1–M5 manual verify |
-| `PurchaseOrder.amountPaidMmk` + payables APIs | Supplier paid / amount left; zakat auto-deducts unpaid PO balance |
+| `PATCH .../billing/invoices/:id/recoverability` | LIKELY / DOUBTFUL / HOPELESS zakat AR filter |
+| `excludedDoubtfulReceivablesMmk` on calculate | Open AR marked doubtful/hopeless (not in net) |
 | `GET .../purchases/suppliers/:id/payables` | Per-supplier AP summary |
-| `POST .../purchases/:id/payments` | Record supplier payment on a PO |
+| `POST .../purchases/:id/payments` | Record supplier payment on a PO (+ auto BUSINESS OUTFLOW) |
+| Cash ledger `view=BUSINESS\|MANUAL\|TOTAL` | Dual cash book + balances; loophole suite CL1–CL12 |
+| `npm run test:cash-ledger` | Unit balance math + process CL1–CL12 |
 
-**Run stamp:** 2026-07-23 — unit zakat **18/18**; process zakat-hanafi **9/9** (tracker + M1–M5). Re-seed after manual-verify.
+**Run stamp:** 2026-07-26 — cash-ledger unit + process CL1–CL12 (see `test/process/cash-ledger.process.e2e-spec.ts`).
 
 Loans / non-PO liabilities stay manual via calculate `payablesMmk` (`MANUAL_OTHER_LIABILITIES`).
+
+### Cash ledger loopholes (accepted / documented)
+
+- Staff can duplicate BUSINESS money with MANUAL rows (TOTAL overstates) — ops: never re-enter collections/PO pays.
+- `cashOnHandMmk: 0` with `useCashLedgerBalances` overrides ledger to zero.
+- Historical payments before auto-post are not in the ledger.
+- Net cash/bank floored at 0 (overdraft looks empty).

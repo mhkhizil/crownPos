@@ -8,6 +8,7 @@ import { RecordPaymentUseCase } from '../../../application/use-cases/billing/rec
 import { ListCollectionRemindersUseCase } from '../../../application/use-cases/billing/list-collection-reminders.use-case.js';
 import { CreateCollectionReminderUseCase } from '../../../application/use-cases/billing/create-collection-reminder.use-case.js';
 import { DispatchDueCollectionRemindersUseCase } from '../../../application/use-cases/billing/dispatch-due-collection-reminders.use-case.js';
+import { UpdateInvoiceRecoverabilityUseCase } from '../../../application/use-cases/billing/update-invoice-recoverability.use-case.js';
 import { BILLING_REPOSITORY } from '../../../domain/repositories/billing.repository.interface.js';
 import { BillingRepository } from '../../../infrastructure/repositories/billing.repository.js';
 import { SALES_REPOSITORY } from '../../../domain/repositories/sales.repository.interface.js';
@@ -53,6 +54,7 @@ function hasSmspohConfig(config: ConfigService): boolean {
     ListCollectionRemindersUseCase,
     CreateCollectionReminderUseCase,
     DispatchDueCollectionRemindersUseCase,
+    UpdateInvoiceRecoverabilityUseCase,
     CollectionReminderDispatchScheduler,
     NoopEmailSender,
     NoopSmsSender,

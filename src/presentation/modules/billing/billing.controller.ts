@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -19,6 +20,7 @@ import {
 import { ApiResponseDto } from '../../../application/dtos/common/api-response.dto.js';
 import { ListInvoicesUseCase } from '../../../application/use-cases/billing/list-invoices.use-case.js';
 import { CreateInvoiceFromOrderUseCase } from '../../../application/use-cases/billing/create-invoice-from-order.use-case.js';
+import { UpdateInvoiceRecoverabilityUseCase } from '../../../application/use-cases/billing/update-invoice-recoverability.use-case.js';
 import { ListPaymentsUseCase } from '../../../application/use-cases/billing/list-payments.use-case.js';
 import { RecordPaymentUseCase } from '../../../application/use-cases/billing/record-payment.use-case.js';
 import { ListCollectionRemindersUseCase } from '../../../application/use-cases/billing/list-collection-reminders.use-case.js';
@@ -33,6 +35,7 @@ import {
   InvoiceResponseDto,
   PaymentResponseDto,
   RecordPaymentDto,
+  UpdateInvoiceRecoverabilityDto,
 } from '../../../application/dtos/billing/index.js';
 
 @ApiTags('Billing')
@@ -43,6 +46,7 @@ export class BillingController {
   constructor(
     private readonly listInvoices: ListInvoicesUseCase,
     private readonly createInvoice: CreateInvoiceFromOrderUseCase,
+    private readonly updateRecoverability: UpdateInvoiceRecoverabilityUseCase,
     private readonly listPayments: ListPaymentsUseCase,
     private readonly recordPayment: RecordPaymentUseCase,
     private readonly listReminders: ListCollectionRemindersUseCase,
@@ -51,7 +55,12 @@ export class BillingController {
   ) {}
 
   @Get('invoices')
-  @ApiOperation({ summary: 'List invoices' })
+  @ApiOperation({
+    summary: 'List invoices',
+    description:
+      'Returns invoices including `recoverability` (LIKELY | DOUBTFUL | HOPELESS). ' +
+      'Use PATCH .../invoices/:id/recoverability before annual zakat calculate so doubtful/hopeless AR is not counted as zakatable wealth.',
+  })
   @ApiArraySuccessResponse(InvoiceResponseDto, {
     status: HttpStatus.OK,
     description: 'Invoices retrieved',
@@ -64,7 +73,11 @@ export class BillingController {
 
   @Post('invoices/from-order/:salesOrderId')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create invoice from sales order' })
+  @ApiOperation({
+    summary: 'Create invoice from sales order',
+    description:
+      'Creates an ISSUED invoice with recoverability=LIKELY (default). New AR is included in zakat until staff reclassifies it.',
+  })
   @ApiSuccessResponse(InvoiceResponseDto, {
     status: HttpStatus.CREATED,
     description: 'Invoice created',
@@ -77,6 +90,38 @@ export class BillingController {
     return ApiResponseDto.success(
       await this.createInvoice.execute(u.sub, salesOrderId, body?.dueDate),
       'Invoice created',
+    );
+  }
+
+  @Patch('invoices/:id/recoverability')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Set invoice recoverability (zakat AR filter)',
+    description:
+      'Marks whether an open receivable should count toward Hanafi business zakat.\n\n' +
+      '**Why this exists:** Payment status (ISSUED / PARTIALLY_PAID / OVERDUE) is not the same as recoverability. ' +
+      'A shop overdue 2 years may still be expected to pay (LIKELY), or may be bankrupt/denied (HOPELESS). ' +
+      'Without this flag, all open AR inflated zakatable wealth equally.\n\n' +
+      '**Values**\n' +
+      '- `LIKELY` (default): include `balanceDueMmk` in zakat `receivablesMmk`.\n' +
+      '- `DOUBTFUL`: exclude from zakat net; amount still shown as `excludedDoubtfulReceivablesMmk` on calculate. ' +
+      'If cash later arrives, treat it as cash/bank that year (manual cash field) — typically zakat that recovery year, not backfilled years.\n' +
+      '- `HOPELESS`: exclude from zakat like irrecoverable debt for the estimate; collection can continue. Prefer this over WRITTEN_OFF when you only want a zakat exclusion without accounting write-off.\n\n' +
+      '**Still always excluded from AR regardless of flag:** DRAFT, CANCELLED, WRITTEN_OFF.\n\n' +
+      '**Permission:** `MANAGE_BILLING`. Affects next `POST .../bd-analytics/zakat/hanafi/calculate` snapshot.',
+  })
+  @ApiSuccessResponse(InvoiceResponseDto, {
+    status: HttpStatus.OK,
+    description: 'Invoice recoverability updated',
+  })
+  async patchRecoverability(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Body() body: UpdateInvoiceRecoverabilityDto,
+  ): Promise<ApiResponseDto<InvoiceResponseDto>> {
+    return ApiResponseDto.success(
+      await this.updateRecoverability.execute(u.sub, id, body),
+      'Invoice recoverability updated',
     );
   }
 

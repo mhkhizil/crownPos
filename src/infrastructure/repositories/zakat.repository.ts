@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service.js';
+import { InvoiceRecoverability } from '../../domain/enums/invoice-recoverability.enum.js';
 import { InvoiceStatus } from '../../domain/enums/invoice-status.enum.js';
 import { ZakatNisabStyle } from '../../domain/enums/zakat-nisab-style.enum.js';
 import { ZakatPeriodType } from '../../domain/enums/zakat-period-type.enum.js';
@@ -49,16 +50,35 @@ function toEntity(row: ZakatRow): ZakatPaymentEntity {
 export class ZakatRepository implements IZakatRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  private openArStatusFilter() {
+    return {
+      notIn: [
+        InvoiceStatus.DRAFT,
+        InvoiceStatus.CANCELLED,
+        InvoiceStatus.WRITTEN_OFF,
+      ],
+    } as const;
+  }
+
   async sumOpenReceivablesMmk(): Promise<number> {
     const agg = await this.prisma.invoice.aggregate({
       where: {
         deletedAt: null,
-        status: {
-          notIn: [
-            InvoiceStatus.DRAFT,
-            InvoiceStatus.CANCELLED,
-            InvoiceStatus.WRITTEN_OFF,
-          ],
+        status: this.openArStatusFilter(),
+        recoverability: InvoiceRecoverability.LIKELY,
+      },
+      _sum: { balanceDueMmk: true },
+    });
+    return num(agg._sum.balanceDueMmk);
+  }
+
+  async sumExcludedDoubtfulReceivablesMmk(): Promise<number> {
+    const agg = await this.prisma.invoice.aggregate({
+      where: {
+        deletedAt: null,
+        status: this.openArStatusFilter(),
+        recoverability: {
+          in: [InvoiceRecoverability.DOUBTFUL, InvoiceRecoverability.HOPELESS],
         },
       },
       _sum: { balanceDueMmk: true },
@@ -136,6 +156,8 @@ export class ZakatRepository implements IZakatRepository {
 
     return {
       receivablesMmk: await this.sumOpenReceivablesMmk(),
+      excludedDoubtfulReceivablesMmk:
+        await this.sumExcludedDoubtfulReceivablesMmk(),
       finishedGoodsValueMmk:
         Math.round(finishedGoodsValueMmk * 100) / 100,
       rawMaterialsValueMmk: Math.round(rawMaterialsValueMmk * 100) / 100,

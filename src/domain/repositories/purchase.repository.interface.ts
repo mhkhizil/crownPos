@@ -2,6 +2,7 @@ import type {
   PurchaseOrderEntity,
   SupplierPayablesSummary,
 } from '../entities/purchase-order.entity.js';
+import type { CashLedgerAccount } from '../enums/cash-ledger-account.enum.js';
 import type { PurchaseStatus } from '../enums/purchase-status.enum.js';
 
 export const PURCHASE_REPOSITORY = Symbol('PURCHASE_REPOSITORY');
@@ -47,6 +48,10 @@ export interface ReceivePurchaseOrderInput {
 export interface RecordPurchasePaymentInput {
   purchaseOrderId: string;
   amountMmk: number;
+  /** Pocket that paid the supplier (default BANK). */
+  account?: CashLedgerAccount;
+  /** Payment calendar day (default today UTC). */
+  paidAt?: string;
 }
 
 export interface IPurchaseRepository {

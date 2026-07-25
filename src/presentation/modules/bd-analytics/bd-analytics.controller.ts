@@ -35,6 +35,12 @@ import { RecordZakatPaymentUseCase } from '../../../application/use-cases/zakat/
 import { ListZakatPaymentsUseCase } from '../../../application/use-cases/zakat/list-zakat-payments.use-case.js';
 import { GetZakatPaymentCoverageUseCase } from '../../../application/use-cases/zakat/get-zakat-payment-coverage.use-case.js';
 import { DeleteZakatPaymentUseCase } from '../../../application/use-cases/zakat/delete-zakat-payment.use-case.js';
+import {
+  CreateCashLedgerEntryUseCase,
+  DeleteCashLedgerEntryUseCase,
+  GetCashLedgerBalancesUseCase,
+  ListCashLedgerEntriesUseCase,
+} from '../../../application/use-cases/cash-ledger/cash-ledger.use-case.js';
 import { ROUTE_PREFIX } from '../../routing.paths.js';
 import {
   AnalyticsSummaryResponseDto,
@@ -63,6 +69,13 @@ import {
   ZakatCoverageResponseDto,
   ZakatPaymentResponseDto,
 } from '../../../application/dtos/zakat/index.js';
+import {
+  CashLedgerBalancesQueryDto,
+  CashLedgerBalancesResponseDto,
+  CashLedgerEntryResponseDto,
+  CreateCashLedgerEntryDto,
+  ListCashLedgerQueryDto,
+} from '../../../application/dtos/cash-ledger/index.js';
 
 @ApiTags('BD / Analytics')
 @Controller(`${ROUTE_PREFIX.adminDashboard}/bd-analytics`)
@@ -86,6 +99,10 @@ export class BdAnalyticsController {
     private readonly listZakatPayments: ListZakatPaymentsUseCase,
     private readonly getZakatCoverage: GetZakatPaymentCoverageUseCase,
     private readonly deleteZakatPayment: DeleteZakatPaymentUseCase,
+    private readonly createCashLedger: CreateCashLedgerEntryUseCase,
+    private readonly listCashLedger: ListCashLedgerEntriesUseCase,
+    private readonly getCashLedgerBalances: GetCashLedgerBalancesUseCase,
+    private readonly deleteCashLedger: DeleteCashLedgerEntryUseCase,
   ) {}
 
   @Post('targets')
@@ -264,7 +281,14 @@ export class BdAnalyticsController {
   @ApiOperation({
     summary: 'Hanafi business zakat estimate (yearly)',
     description:
-      'Computes due for a Gregorian year (optional `year`, default current UTC). Not a daily calculator — overlapping payments are year-scoped.',
+      'Computes due for a Gregorian year (optional `year`, default current UTC). Not a daily calculator — overlapping payments are year-scoped.\n\n' +
+      '**Receivables:** only open invoices with `recoverability=LIKELY` enter `receivablesMmk`. ' +
+      'DOUBTFUL / HOPELESS open balances are returned as `excludedDoubtfulReceivablesMmk` (not in net). ' +
+      'Classify invoices with `PATCH /admin/dashboard/billing/invoices/:id/recoverability` before calculate. ' +
+      'DRAFT / CANCELLED / WRITTEN_OFF are always excluded.\n\n' +
+      '**Cash/bank:** type amounts, or set `useCashLedgerBalances=true` to pull **TOTAL** ledger nets ' +
+      '(BUSINESS auto invoice/PO posts + MANUAL custom). Inspect slices via ' +
+      '`GET .../cash-ledger/balances?view=BUSINESS|MANUAL|TOTAL`.',
   })
   @ApiSuccessResponse(HanafiZakatCalculateResponseDto, {
     status: HttpStatus.OK,
@@ -276,6 +300,89 @@ export class BdAnalyticsController {
   ): Promise<ApiResponseDto<HanafiZakatCalculateResponseDto>> {
     return ApiResponseDto.success(
       await this.calculateHanafiZakat.execute(u.sub, body),
+    );
+  }
+
+  @Post('cash-ledger')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Record a MANUAL cash/bank movement',
+    description:
+      'Staff custom inflow/outflow (capital, personal draw, home, misc).\n\n' +
+      '**Auto BUSINESS rows** are created separately when you record invoice payments (INFLOW) or PO payments (OUTFLOW) — do not duplicate those here.\n\n' +
+      '**Two views**\n' +
+      '- `GET .../cash-ledger?view=BUSINESS` — business process only\n' +
+      '- `GET .../cash-ledger?view=TOTAL` — business + these manuals\n' +
+      '- `GET .../cash-ledger?view=MANUAL` — manuals only',
+  })
+  @ApiSuccessResponse(CashLedgerEntryResponseDto, {
+    status: HttpStatus.CREATED,
+    description: 'Cash ledger entry created',
+  })
+  async cashLedgerCreate(
+    @CurrentUser() u: JwtPayload,
+    @Body() body: CreateCashLedgerEntryDto,
+  ): Promise<ApiResponseDto<CashLedgerEntryResponseDto>> {
+    return ApiResponseDto.success(
+      await this.createCashLedger.execute(u.sub, body),
+      'Cash ledger entry recorded',
+    );
+  }
+
+  @Get('cash-ledger')
+  @ApiOperation({
+    summary: 'List cash ledger (BUSINESS / MANUAL / TOTAL)',
+    description:
+      'Daily cash book with a **view** slice:\n' +
+      '- **BUSINESS** — auto invoice collections + supplier PO payments only\n' +
+      '- **MANUAL** — capital / personal / home / misc staff entries only\n' +
+      '- **TOTAL** — BUSINESS + MANUAL (full picture)\n\n' +
+      'Filter with `date=YYYY-MM-DD` for one day, or `from`/`to`.',
+  })
+  @ApiArraySuccessResponse(CashLedgerEntryResponseDto, {
+    status: HttpStatus.OK,
+    description: 'Cash ledger entries retrieved',
+  })
+  async cashLedgerList(
+    @CurrentUser() u: JwtPayload,
+    @Query() query: ListCashLedgerQueryDto,
+  ): Promise<ApiResponseDto<CashLedgerEntryResponseDto[]>> {
+    return ApiResponseDto.success(await this.listCashLedger.execute(u.sub, query));
+  }
+
+  @Get('cash-ledger/balances')
+  @ApiOperation({
+    summary: 'Net cash/bank by view (BUSINESS / MANUAL / TOTAL)',
+    description:
+      'Same three slices as list. Zakat `useCashLedgerBalances` uses **TOTAL**.',
+  })
+  @ApiSuccessResponse(CashLedgerBalancesResponseDto, {
+    status: HttpStatus.OK,
+    description: 'Cash ledger balances retrieved',
+  })
+  async cashLedgerBalances(
+    @CurrentUser() u: JwtPayload,
+    @Query() query: CashLedgerBalancesQueryDto,
+  ): Promise<ApiResponseDto<CashLedgerBalancesResponseDto>> {
+    return ApiResponseDto.success(
+      await this.getCashLedgerBalances.execute(u.sub, query),
+    );
+  }
+
+  @Delete('cash-ledger/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Soft-delete a cash ledger entry' })
+  @ApiSuccessResponse(CashLedgerEntryResponseDto, {
+    status: HttpStatus.OK,
+    description: 'Cash ledger entry deleted',
+  })
+  async cashLedgerDelete(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<CashLedgerEntryResponseDto>> {
+    return ApiResponseDto.success(
+      await this.deleteCashLedger.execute(u.sub, id),
+      'Cash ledger entry deleted',
     );
   }
 

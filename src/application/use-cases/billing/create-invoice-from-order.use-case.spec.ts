@@ -9,6 +9,7 @@ import { InvoiceEntity } from '../../../domain/entities/billing.entity.js';
 import { SalesOrderEntity } from '../../../domain/entities/sales-order.entity.js';
 import { UserEntity } from '../../../domain/entities/user.entity.js';
 import { DeliveryChannel } from '../../../domain/enums/delivery-channel.enum.js';
+import { InvoiceRecoverability } from '../../../domain/enums/invoice-recoverability.enum.js';
 import { InvoiceStatus } from '../../../domain/enums/invoice-status.enum.js';
 import { OrderSource } from '../../../domain/enums/order-source.enum.js';
 import { PermissionCode } from '../../../domain/enums/permission-code.enum.js';
@@ -72,6 +73,7 @@ function invoice(): InvoiceEntity {
     new Date('2026-07-19'),
     null,
     InvoiceStatus.ISSUED,
+    InvoiceRecoverability.LIKELY,
     1000,
     1000,
     0,

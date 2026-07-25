@@ -41,7 +41,10 @@ export interface StockValuationLine {
 }
 
 export interface ZakatWealthSnapshot {
+  /** Open AR with recoverability=LIKELY only. */
   receivablesMmk: number;
+  /** Open AR marked DOUBTFUL or HOPELESS (shown excluded; not in net). */
+  excludedDoubtfulReceivablesMmk: number;
   finishedGoodsValueMmk: number;
   rawMaterialsValueMmk: number;
   excludedPhysicalAssetsMmk: number;

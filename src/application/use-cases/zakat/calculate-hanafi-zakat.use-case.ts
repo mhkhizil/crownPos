@@ -7,6 +7,8 @@ import { USER_REPOSITORY } from '../../../domain/repositories/user.repository.in
 import type { IUserRepository } from '../../../domain/repositories/user.repository.interface.js';
 import { ZAKAT_REPOSITORY } from '../../../domain/repositories/zakat.repository.interface.js';
 import type { IZakatRepository } from '../../../domain/repositories/zakat.repository.interface.js';
+import { CASH_LEDGER_REPOSITORY } from '../../../domain/repositories/cash-ledger.repository.interface.js';
+import type { ICashLedgerRepository } from '../../../domain/repositories/cash-ledger.repository.interface.js';
 import { requirePermission } from '../_helpers/admin-authorization.helper.js';
 import { PermissionCode } from '../../../domain/enums/permission-code.enum.js';
 import {
@@ -15,6 +17,7 @@ import {
 } from '../../../domain/zakat/hanafi-business-zakat.calculator.js';
 import { resolveZakatPeriod } from '../../../domain/zakat/resolve-zakat-period.js';
 import { ZakatPeriodType } from '../../../domain/enums/zakat-period-type.enum.js';
+import { CashFlowView } from '../../../domain/enums/cash-flow-view.enum.js';
 import {
   CalculateHanafiZakatDto,
   HanafiZakatCalculateResponseDto,
@@ -25,6 +28,8 @@ export class CalculateHanafiZakatUseCase {
   constructor(
     @Inject(USER_REPOSITORY) private readonly users: IUserRepository,
     @Inject(ZAKAT_REPOSITORY) private readonly zakat: IZakatRepository,
+    @Inject(CASH_LEDGER_REPOSITORY)
+    private readonly cashLedger: ICashLedgerRepository,
   ) {}
 
   async execute(
@@ -39,11 +44,36 @@ export class CalculateHanafiZakatUseCase {
       Math.round((snapshot.supplierPayablesMmk + otherPayablesMmk) * 100) /
       100;
 
+    let cashOnHandMmk = body.cashOnHandMmk;
+    let bankBalanceMmk = body.bankBalanceMmk;
+    const warnings = [...snapshot.warnings];
+
+    if (body.useCashLedgerBalances) {
+      const asOf = body.asOfDate
+        ? (() => {
+            const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(body.asOfDate.trim());
+            if (!m) return undefined;
+            return new Date(
+              Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])),
+            );
+          })()
+        : undefined;
+      const balances = await this.cashLedger.getBalances(
+        asOf,
+        CashFlowView.TOTAL,
+      );
+      if (cashOnHandMmk == null) cashOnHandMmk = balances.cashOnHandMmk;
+      if (bankBalanceMmk == null) bankBalanceMmk = balances.bankBalanceMmk;
+      warnings.push(
+        'Cash/bank from custom cash ledger (invoice collections & PO payments not auto-included).',
+      );
+    }
+
     let calc;
     try {
       calc = calculateHanafiBusinessZakat({
-        cashOnHandMmk: body.cashOnHandMmk ?? 0,
-        bankBalanceMmk: body.bankBalanceMmk ?? 0,
+        cashOnHandMmk: cashOnHandMmk ?? 0,
+        bankBalanceMmk: bankBalanceMmk ?? 0,
         receivablesMmk: snapshot.receivablesMmk,
         finishedGoodsValueMmk: snapshot.finishedGoodsValueMmk,
         rawMaterialsValueMmk: snapshot.rawMaterialsValueMmk,
@@ -72,9 +102,10 @@ export class CalculateHanafiZakatUseCase {
 
     return HanafiZakatCalculateResponseDto.fromCalc(calc, {
       excludedPhysicalAssetsMmk: snapshot.excludedPhysicalAssetsMmk,
+      excludedDoubtfulReceivablesMmk: snapshot.excludedDoubtfulReceivablesMmk,
       supplierPayablesMmk: snapshot.supplierPayablesMmk,
       otherPayablesMmk,
-      warnings: snapshot.warnings,
+      warnings,
       overlappingPayments: overlapping,
     });
   }

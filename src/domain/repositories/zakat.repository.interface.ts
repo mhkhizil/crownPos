@@ -27,8 +27,13 @@ export interface ListZakatPaymentsFilter {
 }
 
 export interface IZakatRepository {
-  /** Open trade receivables (excludes DRAFT / CANCELLED / WRITTEN_OFF). */
+  /**
+   * Open trade receivables with recoverability=LIKELY
+   * (excludes DRAFT / CANCELLED / WRITTEN_OFF and DOUBTFUL / HOPELESS).
+   */
   sumOpenReceivablesMmk(): Promise<number>;
+  /** Open AR marked DOUBTFUL or HOPELESS (still open status-wise). */
+  sumExcludedDoubtfulReceivablesMmk(): Promise<number>;
   /** Value FG at sell price + raw at last cost; sum physical asset book values as excluded. */
   getWealthSnapshot(): Promise<ZakatWealthSnapshot>;
   createPayment(data: CreateZakatPaymentInput): Promise<ZakatPaymentEntity>;

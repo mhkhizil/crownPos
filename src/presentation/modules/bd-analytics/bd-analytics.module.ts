@@ -16,10 +16,18 @@ import { RecordZakatPaymentUseCase } from '../../../application/use-cases/zakat/
 import { ListZakatPaymentsUseCase } from '../../../application/use-cases/zakat/list-zakat-payments.use-case.js';
 import { GetZakatPaymentCoverageUseCase } from '../../../application/use-cases/zakat/get-zakat-payment-coverage.use-case.js';
 import { DeleteZakatPaymentUseCase } from '../../../application/use-cases/zakat/delete-zakat-payment.use-case.js';
+import {
+  CreateCashLedgerEntryUseCase,
+  DeleteCashLedgerEntryUseCase,
+  GetCashLedgerBalancesUseCase,
+  ListCashLedgerEntriesUseCase,
+} from '../../../application/use-cases/cash-ledger/cash-ledger.use-case.js';
 import { BD_ANALYTICS_REPOSITORY } from '../../../domain/repositories/bd-analytics.repository.interface.js';
 import { BdAnalyticsRepository } from '../../../infrastructure/repositories/bd-analytics.repository.js';
 import { ZAKAT_REPOSITORY } from '../../../domain/repositories/zakat.repository.interface.js';
 import { ZakatRepository } from '../../../infrastructure/repositories/zakat.repository.js';
+import { CASH_LEDGER_REPOSITORY } from '../../../domain/repositories/cash-ledger.repository.interface.js';
+import { CashLedgerRepository } from '../../../infrastructure/repositories/cash-ledger.repository.js';
 import { USER_REPOSITORY } from '../../../domain/repositories/user.repository.interface.js';
 import { UserRepository } from '../../../infrastructure/repositories/user.repository.js';
 
@@ -42,8 +50,13 @@ import { UserRepository } from '../../../infrastructure/repositories/user.reposi
     ListZakatPaymentsUseCase,
     GetZakatPaymentCoverageUseCase,
     DeleteZakatPaymentUseCase,
+    CreateCashLedgerEntryUseCase,
+    ListCashLedgerEntriesUseCase,
+    GetCashLedgerBalancesUseCase,
+    DeleteCashLedgerEntryUseCase,
     { provide: BD_ANALYTICS_REPOSITORY, useClass: BdAnalyticsRepository },
     { provide: ZAKAT_REPOSITORY, useClass: ZakatRepository },
+    { provide: CASH_LEDGER_REPOSITORY, useClass: CashLedgerRepository },
     { provide: USER_REPOSITORY, useClass: UserRepository },
   ],
 })

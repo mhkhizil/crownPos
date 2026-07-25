@@ -27,6 +27,8 @@ export class RecordPurchasePaymentUseCase {
     const row = await this.purchases.recordPurchasePayment({
       purchaseOrderId,
       amountMmk: body.amountMmk,
+      account: body.account,
+      paidAt: body.paidAt,
     });
     return PurchaseOrderResponseDto.fromEntity(row);
   }

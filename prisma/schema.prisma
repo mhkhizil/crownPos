@@ -118,6 +118,13 @@ enum InvoiceStatus {
   WRITTEN_OFF
 }
 
+/// Hanafi zakat AR filter (staff judgment). Independent of payment status.
+enum InvoiceRecoverability {
+  LIKELY
+  DOUBTFUL
+  HOPELESS
+}
+
 enum PaymentMethod {
   CASH_ON_DELIVERY
   BANK_TRANSFER
@@ -148,6 +155,39 @@ enum ZakatPeriodType {
   MONTH
   YEAR
   CUSTOM
+}
+
+/// Custom cash/bank movements (capital, personal draw, home, misc) — not auto from sales/PO.
+enum CashLedgerDirection {
+  INFLOW
+  OUTFLOW
+}
+
+enum CashLedgerAccount {
+  CASH
+  BANK
+}
+
+enum CashLedgerCategory {
+  /// Starting or injected capital
+  CAPITAL
+  /// Owner took money for personal use
+  PERSONAL_DRAW
+  /// Bought things for home / family from business money
+  HOME_PURCHASE
+  /// Business cost not tracked as a PO (rent, wages, misc) — manual
+  BUSINESS_EXPENSE
+  /// Auto: customer invoice payment received
+  BUSINESS_COLLECTION
+  /// Auto: supplier PO payment recorded
+  BUSINESS_SUPPLIER_PAYMENT
+  OTHER
+}
+
+/// MANUAL = staff custom entry; BUSINESS = auto from sales payment / PO payment
+enum CashLedgerSource {
+  MANUAL
+  BUSINESS
 }
 
 enum InventoryItemType {
@@ -234,6 +274,7 @@ model Company {
   physicalAssets PhysicalAsset[]
   marketingPlans MarketingPlan[]
   zakatPayments  ZakatPayment[]
+  cashLedgerEntries CashLedgerEntry[]
 
   @@index([deletedAt])
 }
@@ -291,6 +332,7 @@ model User {
   assignedReminders  CollectionReminder[] @relation("ReminderAssignee")
   createdReminders   CollectionReminder[] @relation("ReminderCreator")
   zakatPaymentsCreated ZakatPayment[] @relation("ZakatPaymentCreator")
+  cashLedgerEntriesCreated CashLedgerEntry[] @relation("CashLedgerCreator")
   salesOrdersTaken   SalesOrder[]         @relation("SalesOrderTakenBy")
   productionDaysWorked ProductionDailyWorker[]
   outboundsAsDriver  FactoryOutbound[]    @relation("OutboundDriver")
@@ -1237,25 +1279,27 @@ model OutboundStatusLog {
 // =============================================================================
 
 model Invoice {
-  id              String        @id @default(cuid())
-  invoiceNumber   String        @unique
+  id              String                 @id @default(cuid())
+  invoiceNumber   String                 @unique
   customerId      String
   salesOrderId    String?
-  issueDate       DateTime      @db.Date
-  dueDate         DateTime?     @db.Date
-  status          InvoiceStatus @default(DRAFT)
-  subtotalMmk     Decimal       @default(0) @db.Decimal(18, 2)
-  discountMmk     Decimal       @default(0) @db.Decimal(18, 2)
-  totalMmk        Decimal       @default(0) @db.Decimal(18, 2)
-  amountPaidMmk   Decimal       @default(0) @db.Decimal(18, 2)
-  balanceDueMmk   Decimal       @default(0) @db.Decimal(18, 2)
+  issueDate       DateTime               @db.Date
+  dueDate         DateTime?              @db.Date
+  status          InvoiceStatus          @default(DRAFT)
+  /// Zakatable AR only when LIKELY (and status still open). See docs/zakat-hanafi.md.
+  recoverability  InvoiceRecoverability  @default(LIKELY)
+  subtotalMmk     Decimal                @default(0) @db.Decimal(18, 2)
+  discountMmk     Decimal                @default(0) @db.Decimal(18, 2)
+  totalMmk        Decimal                @default(0) @db.Decimal(18, 2)
+  amountPaidMmk   Decimal                @default(0) @db.Decimal(18, 2)
+  balanceDueMmk   Decimal                @default(0) @db.Decimal(18, 2)
   notes           String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
   deletedAt       DateTime?
 
-  customer        Customer      @relation(fields: [customerId], references: [id])
-  salesOrder      SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+  customer        Customer               @relation(fields: [customerId], references: [id])
+  salesOrder      SalesOrder?            @relation(fields: [salesOrderId], references: [id])
   lines           InvoiceLine[]
   installments    InvoiceInstallment[]
   paymentAllocations PaymentAllocation[]
@@ -1266,6 +1310,7 @@ model Invoice {
   @@index([issueDate])
   @@index([dueDate])
   @@index([status])
+  @@index([recoverability])
   @@index([deletedAt])
 }
 
@@ -1616,6 +1661,37 @@ model ZakatPayment {
   @@index([periodStart, periodEnd])
   @@index([year, month])
   @@index([paidAt])
+  @@index([companyId])
+  @@index([deletedAt])
+}
+
+/// Custom daily cash/bank movements (capital, personal, home, misc).
+/// Not auto-created from sales invoices or purchase-order payments.
+model CashLedgerEntry {
+  id              String              @id @default(cuid())
+  companyId       String?
+  entryDate       DateTime            @db.Date
+  direction       CashLedgerDirection
+  account         CashLedgerAccount
+  category        CashLedgerCategory
+  source          CashLedgerSource    @default(MANUAL)
+  /// Idempotency for auto posts, e.g. payment:{id} or po-payment:{id}:{cuid}
+  sourceRef       String?             @unique
+  amountMmk       Decimal             @db.Decimal(18, 2)
+  notes           String?
+  createdByUserId String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  deletedAt       DateTime?
+
+  company         Company?            @relation(fields: [companyId], references: [id])
+  createdBy       User?               @relation("CashLedgerCreator", fields: [createdByUserId], references: [id])
+
+  @@index([entryDate])
+  @@index([account, entryDate])
+  @@index([direction])
+  @@index([category])
+  @@index([source])
   @@index([companyId])
   @@index([deletedAt])
 }

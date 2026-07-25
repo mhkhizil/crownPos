@@ -24,6 +24,7 @@
     "test:integrity": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --testPathPatterns=data-integrity",
     "test:edge": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --testPathPatterns=edge-cases",
     "test:zakat": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --testPathPatterns=zakat --no-coverage && node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --testPathPatterns=zakat-hanafi --no-coverage",
+    "test:cash-ledger": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --testPathPatterns=cash-ledger.balance --no-coverage && node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --testPathPatterns=cash-ledger.process --no-coverage",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",
