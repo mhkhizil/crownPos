@@ -60,13 +60,10 @@ export class CalculateHanafiZakatUseCase {
       throw err;
     }
 
-    const now = new Date();
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth() + 1;
+    const year = body.year ?? new Date().getUTCFullYear();
     const window = resolveZakatPeriod({
-      periodType: ZakatPeriodType.MONTH,
+      periodType: ZakatPeriodType.YEAR,
       year,
-      month,
     });
     const overlapping = await this.zakat.listPaymentsOverlapping(
       window.periodStart,

@@ -144,7 +144,7 @@ Env: `PUSHER_*`, optional `COLLECTION_REMINDER_DISPATCH_ENABLED=false` to pause 
 |---|---|
 | `docs/zakat-hanafi.md` | Fiqh buckets, APIs, M1–M5 worksheet, completeness codes |
 | `POST .../bd-analytics/zakat/hanafi/calculate` | Gold/silver nisab estimate |
-| `.../zakat/payments` | MONTH / YEAR / CUSTOM payment tracker |
+| `.../zakat/payments` | YEAR payment tracker (yearly only) |
 | Domain calculator + period resolver | Pure math (unit Z/P) |
 | `npm run test:zakat` | Unit zakat + process tracker + M1–M5 manual verify |
 | `PurchaseOrder.amountPaidMmk` + payables APIs | Supplier paid / amount left; zakat auto-deducts unpaid PO balance |

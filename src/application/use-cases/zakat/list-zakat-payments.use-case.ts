@@ -33,7 +33,6 @@ export class ListZakatPaymentsUseCase {
       from: parseOptionalDate(query.from),
       to: parseOptionalDate(query.to),
       year: query.year,
-      month: query.month,
     });
     return rows.map((r) => ZakatPaymentResponseDto.fromEntity(r));
   }

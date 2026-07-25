@@ -1,4 +1,5 @@
 import {
+  Equals,
   IsBoolean,
   IsDateString,
   IsEnum,
@@ -6,9 +7,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  Max,
   Min,
-  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -22,6 +21,16 @@ export class CalculateHanafiZakatDto {
   @ApiProperty({ enum: ZakatNisabStyle })
   @IsEnum(ZakatNisabStyle)
   nisabStyle!: ZakatNisabStyle;
+
+  @ApiPropertyOptional({
+    description:
+      'Gregorian zakat year for overlapping payments (default: current UTC year). Yearly only — not daily/monthly.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(2000)
+  year?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -61,42 +70,24 @@ export class CalculateHanafiZakatDto {
   @IsBoolean()
   haulCompleted!: boolean;
 
-  @ApiPropertyOptional({ description: 'Label only; snapshot uses live DB' })
+  @ApiPropertyOptional({
+    description: 'Optional label only; wealth snapshot is always live DB',
+  })
   @IsOptional()
   @IsDateString()
   asOfDate?: string;
 }
 
+/** Zakat ops are yearly only (Gregorian calendar year). */
 export class RecordZakatPaymentDto {
-  @ApiProperty({ enum: ZakatPeriodType })
-  @IsEnum(ZakatPeriodType)
-  periodType!: ZakatPeriodType;
+  @ApiProperty({ enum: [ZakatPeriodType.YEAR], default: ZakatPeriodType.YEAR })
+  @Equals(ZakatPeriodType.YEAR)
+  periodType!: ZakatPeriodType.YEAR;
 
-  @ApiPropertyOptional()
-  @ValidateIf(
-    (o: RecordZakatPaymentDto) =>
-      o.periodType === ZakatPeriodType.MONTH ||
-      o.periodType === ZakatPeriodType.YEAR,
-  )
+  @ApiProperty({ description: 'Gregorian zakat year' })
   @IsInt()
-  year?: number;
-
-  @ApiPropertyOptional()
-  @ValidateIf((o: RecordZakatPaymentDto) => o.periodType === ZakatPeriodType.MONTH)
-  @IsInt()
-  @Min(1)
-  @Max(12)
-  month?: number;
-
-  @ApiPropertyOptional()
-  @ValidateIf((o: RecordZakatPaymentDto) => o.periodType === ZakatPeriodType.CUSTOM)
-  @IsDateString()
-  periodStart?: string;
-
-  @ApiPropertyOptional()
-  @ValidateIf((o: RecordZakatPaymentDto) => o.periodType === ZakatPeriodType.CUSTOM)
-  @IsDateString()
-  periodEnd?: string;
+  @Min(2000)
+  year!: number;
 
   @ApiProperty()
   @IsNumber()
@@ -130,33 +121,15 @@ export class RecordZakatPaymentDto {
 }
 
 export class ZakatCoverageQueryDto {
-  @ApiProperty({ enum: ZakatPeriodType })
-  @IsEnum(ZakatPeriodType)
-  periodType!: ZakatPeriodType;
+  @ApiProperty({ enum: [ZakatPeriodType.YEAR], default: ZakatPeriodType.YEAR })
+  @Equals(ZakatPeriodType.YEAR)
+  periodType!: ZakatPeriodType.YEAR;
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty({ description: 'Gregorian zakat year' })
   @Type(() => Number)
   @IsInt()
-  year?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(12)
-  month?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  periodStart?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  periodEnd?: string;
+  @Min(2000)
+  year!: number;
 }
 
 export class ListZakatPaymentsQueryDto {
@@ -170,19 +143,11 @@ export class ListZakatPaymentsQueryDto {
   @IsDateString()
   to?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Filter by Gregorian zakat year' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   year?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(12)
-  month?: number;
 }
 
 export class ZakatPaymentResponseDto {

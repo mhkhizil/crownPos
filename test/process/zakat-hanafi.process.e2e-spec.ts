@@ -73,9 +73,8 @@ describe('L3 process: zakat tracker + calculate', () => {
   it('H4/H5/H6/H8: record, coverage, duplicate sum, delete', async () => {
     requireDb();
     const body = {
-      periodType: 'MONTH',
+      periodType: 'YEAR',
       year: 2030,
-      month: 3,
       amountPaidMmk: 10_000,
       paidAt: '2030-03-15',
       notes: 'zakat-process-test',
@@ -98,7 +97,7 @@ describe('L3 process: zakat tracker + calculate', () => {
     const cov = await apiGet<{ totalPaidMmk: number; payments: unknown[] }>(
       server,
       token,
-      `${BASE}/zakat/payments/coverage?periodType=MONTH&year=2030&month=3`,
+      `${BASE}/zakat/payments/coverage?periodType=YEAR&year=2030`,
     );
     expect(cov.status).toBe(200);
     expect(cov.body.data?.totalPaidMmk).toBe(20_000);
@@ -113,17 +112,17 @@ describe('L3 process: zakat tracker + calculate', () => {
     const cov2 = await apiGet<{ totalPaidMmk: number }>(
       server,
       token,
-      `${BASE}/zakat/payments/coverage?periodType=MONTH&year=2030&month=3`,
+      `${BASE}/zakat/payments/coverage?periodType=YEAR&year=2030`,
     );
     expect(cov2.body.data?.totalPaidMmk).toBe(10_000);
 
     await apiDelete(server, token, `${BASE}/zakat/payments/${b.body.data!.id}`);
   });
 
-  it('H7: invalid YEAR+month → 400', async () => {
+  it('H7: MONTH period rejected → 400', async () => {
     requireDb();
     const res = await apiPost(server, token, `${BASE}/zakat/payments`, {
-      periodType: 'YEAR',
+      periodType: 'MONTH',
       year: 2031,
       month: 5,
       amountPaidMmk: 1,

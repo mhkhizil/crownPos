@@ -13,6 +13,7 @@ import {
   resolveZakatPeriod,
   ZakatPeriodValidationError,
 } from '../../../domain/zakat/resolve-zakat-period.js';
+import { ZakatPeriodType } from '../../../domain/enums/zakat-period-type.enum.js';
 import {
   ZakatCoverageQueryDto,
   ZakatCoverageResponseDto,
@@ -35,11 +36,8 @@ export class GetZakatPaymentCoverageUseCase {
     let period;
     try {
       period = resolveZakatPeriod({
-        periodType: query.periodType,
+        periodType: ZakatPeriodType.YEAR,
         year: query.year,
-        month: query.month,
-        periodStart: query.periodStart,
-        periodEnd: query.periodEnd,
       });
     } catch (err: unknown) {
       if (err instanceof ZakatPeriodValidationError) {

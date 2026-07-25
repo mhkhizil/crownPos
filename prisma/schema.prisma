@@ -1591,7 +1591,7 @@ model AssetDepreciationLog {
   @@index([deletedAt])
 }
 
-/// Ops ledger: zakat paid for a Gregorian MONTH / YEAR / CUSTOM window (Hanafi helper).
+/// Ops ledger: zakat paid for a Gregorian YEAR window (Hanafi helper; API is yearly-only).
 model ZakatPayment {
   id                 String           @id @default(cuid())
   companyId          String?

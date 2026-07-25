@@ -262,7 +262,9 @@ export class BdAnalyticsController {
   @Post('zakat/hanafi/calculate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Hanafi business zakat estimate (gold/silver nisab)',
+    summary: 'Hanafi business zakat estimate (yearly)',
+    description:
+      'Computes due for a Gregorian year (optional `year`, default current UTC). Not a daily calculator — overlapping payments are year-scoped.',
   })
   @ApiSuccessResponse(HanafiZakatCalculateResponseDto, {
     status: HttpStatus.OK,
@@ -280,7 +282,7 @@ export class BdAnalyticsController {
   @Post('zakat/payments')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Record zakat payment for MONTH / YEAR / CUSTOM range',
+    summary: 'Record zakat payment for a Gregorian YEAR',
   })
   @ApiSuccessResponse(ZakatPaymentResponseDto, {
     status: HttpStatus.CREATED,
@@ -297,7 +299,7 @@ export class BdAnalyticsController {
   }
 
   @Get('zakat/payments')
-  @ApiOperation({ summary: 'List zakat payments (overlap or year/month)' })
+  @ApiOperation({ summary: 'List zakat payments (optional year / date range)' })
   @ApiArraySuccessResponse(ZakatPaymentResponseDto, {
     status: HttpStatus.OK,
     description: 'Zakat payments retrieved',
@@ -313,7 +315,7 @@ export class BdAnalyticsController {
 
   @Get('zakat/payments/coverage')
   @ApiOperation({
-    summary: 'Coverage total for a MONTH / YEAR / CUSTOM period',
+    summary: 'Coverage total for a Gregorian YEAR',
   })
   @ApiSuccessResponse(ZakatCoverageResponseDto, {
     status: HttpStatus.OK,

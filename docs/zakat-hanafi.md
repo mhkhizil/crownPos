@@ -29,13 +29,15 @@ Loans / non-PO debts are still manual (`MANUAL_OTHER_LIABILITIES`).
 
 ## APIs (`MANAGE_BD` for zakat; `MANAGE_INVENTORY` for purchases)
 
-- `POST /api/v1/admin/dashboard/bd-analytics/zakat/hanafi/calculate`
-- `POST /api/v1/admin/dashboard/bd-analytics/zakat/payments` — MONTH / YEAR / CUSTOM
-- `GET .../zakat/payments` — list
-- `GET .../zakat/payments/coverage` — overlap sum
+**Yearly only** (Gregorian calendar year) — not daily/monthly.
+
+- `POST /api/v1/admin/dashboard/bd-analytics/zakat/hanafi/calculate` — optional `year` (default: current UTC year); overlapping payments are year-scoped
+- `POST .../zakat/payments` — `periodType: YEAR` + `year` required
+- `GET .../zakat/payments` — list (optional `year` / date range)
+- `GET .../zakat/payments/coverage?periodType=YEAR&year=` — year coverage sum
 - `DELETE .../zakat/payments/:id` — soft-delete
 
-Tracker periods are **Gregorian** (ops ledger). Classical haul is lunar — see consideration `GREGORIAN_TRACKER_NOT_LUNAR_HAUL`.
+Tracker periods are **Gregorian year** (ops ledger). Classical haul is lunar — see consideration `GREGORIAN_TRACKER_NOT_LUNAR_HAUL`.
 
 ## Completeness codes (`considerations[]`)
 
